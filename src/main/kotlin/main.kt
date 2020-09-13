@@ -9,22 +9,20 @@ import kotlin.math.roundToLong
  *
  * Original Python script by Dark Revenant.
  * Transcoded to Kotlin and edited to show more info by Wisp.
- *
- * v1.2.0 - Image channels are now accurately detected for all known cases, improving accuracy (now on par with original Python script).
- * v1.1.0 - Backgrounds are now only counted if larger than vanilla size and only by their increase over vanilla.
- * v1.0.0 - Original release of Wisp's version.
  */
 
 const val VANILLA_BACKGROUND_WIDTH = 2048
 const val VANILLA_BACKGROUND_TEXTURE_SIZE_IN_BYTES = 12582912f
 
 //val gameModsFolder = File("C:\\Program Files (x86)\\Fractal Softworks\\Starsector\\mods")
-val gameModsFolder = File(System.getProperty("user.dir")) //
+val gameModsFolder = File(System.getProperty("user.dir")).parentFile
 
 fun main(args: Array<String>) {
-    val debugMode = false
+    val showSkippedFiles = false
+    val showCountedFiles = true
 
-    val finalReadout = StringBuilder()
+    val progressText = StringBuilder()
+    val summaryText = StringBuilder()
     var totalBytes = 0L
 
     if (!gameModsFolder.exists()) {
@@ -37,10 +35,10 @@ fun main(args: Array<String>) {
         .listFiles()!!
         .filter { it.isDirectory }
 
-    println("Mods folder: ${gameModsFolder.absolutePath}")
+    printAndAddLine("Mods folder: ${gameModsFolder.absolutePath}", progressText)
 
     for (modFolder in modFolders) {
-        println("Folder: ${modFolder.name}")
+        printAndAddLine("Folder: ${modFolder.name}", progressText)
 
         val filesInMod =
             modFolder.walkTopDown()
@@ -52,8 +50,8 @@ fun main(args: Array<String>) {
                 val image = try {
                     ImageIO.read(file)!!
                 } catch (e: Exception) {
-                    if (debugMode)
-                        println("Skipping non-image ${file.relativePath} (${e.message})")
+                    if (showSkippedFiles)
+                        printAndAddLine("Skipped non-image ${file.relativePath} (${e.message})", progressText)
                     return@mapNotNull null
                 }
 
@@ -64,7 +62,7 @@ fun main(args: Array<String>) {
                     bitsInAllChannels = image.colorModel.componentSize.toList(),
                     type = when {
                         file.relativePath.contains("backgrounds") -> Type.Background
-                        file.relativePath.endsWith("_CURRENTLY_UNUSED") -> Type.Unused
+                        file.relativePath.contains("_CURRENTLY_UNUSED") -> Type.Unused
                         else -> Type.Texture
                     }
                 )
@@ -74,8 +72,8 @@ fun main(args: Array<String>) {
 
         filesToSumUp.removeAll(modImages
             .filter { it.type == Type.Unused }
-            .also { if (it.any()) println("Skipping unused files") }
-            .onEach { println("  ${it.file.relativePath}") }
+            .also { if (it.any() && showSkippedFiles) printAndAddLine("Skipping unused files", progressText) }
+            .onEach { printAndAddLine("  ${it.file.relativePath}", progressText) }
         )
 
 
@@ -83,23 +81,27 @@ fun main(args: Array<String>) {
         // Therefore, a mod only increases the VRAM use by the size difference of the largest background over vanilla.
         val largestBackgroundBiggerThanVanilla = modImages
             .filter { it.type == Type.Background && it.textureWidth > VANILLA_BACKGROUND_WIDTH }
-            .maxBy { it.bytesUsed }
+            .maxByOrNull { it.bytesUsed }
         filesToSumUp.removeAll(
             modImages.filter { it.type == Type.Background && it != largestBackgroundBiggerThanVanilla }
                 .also {
                     if (it.any())
-                        println("Skipping backgrounds that are not larger than vanilla and/or not the mod's largest background.")
+                        printAndAddLine(
+                            "Skipping backgrounds that are not larger than vanilla and/or not the mod's largest background.",
+                            progressText
+                        )
                 }
-                .onEach { println("   ${it.file.relativePath}") }
+                .onEach { printAndAddLine("   ${it.file.relativePath}", progressText) }
         )
 
         filesToSumUp.forEach { image ->
-            println(
+            printAndAddLine(
                 "${image.file.relativePath} - TexHeight: ${image.textureHeight}, " +
                         "TexWidth: ${image.textureWidth}, " +
                         "Channels: ${image.bitsInAllChannels}, " +
                         "Mult: ${image.multiplier}\n" +
-                        "   --> ${image.textureHeight} * ${image.textureWidth} * ${image.bitsInAllChannels.sum()} * ${image.multiplier} = ${image.bytesUsed} bytes added over vanilla"
+                        "   --> ${image.textureHeight} * ${image.textureWidth} * ${image.bitsInAllChannels.sum()} * ${image.multiplier} = ${image.bytesUsed} bytes added over vanilla",
+                progressText
             )
         }
 
@@ -110,21 +112,29 @@ fun main(args: Array<String>) {
             continue
         }
 
-        finalReadout.appendLine("${modFolder.name} (${filesInMod.count()} images)")
-        finalReadout.appendLine(createSizeBreakdown(totalBytesForMod))
+        summaryText.appendLine("${modFolder.name} (${filesInMod.count()} images)")
+        summaryText.appendLine(createSizeBreakdown(totalBytesForMod))
     }
 
-    finalReadout.appendLine("-------------")
-    finalReadout.appendLine("Total Modlist")
-    finalReadout.appendLine(createSizeBreakdown(totalBytes))
+    printAndAddLine("\n", progressText)
+    summaryText.appendLine("-------------")
+    summaryText.appendLine("Total Modlist")
+    summaryText.appendLine(createSizeBreakdown(totalBytes))
 
-    println(finalReadout.toString())
+    println(summaryText.toString())
     val outputFile = File("$gameModsFolder/mods_VRAM_usage.txt")
+    outputFile.delete()
     outputFile.createNewFile()
-    outputFile.writeText(finalReadout.toString())
+    if (showCountedFiles) outputFile.writeText(progressText.toString())
+    outputFile.appendText(summaryText.toString())
 
     println("\nFile written to ${outputFile.name}\nPress any key to continue.")
     readLine()
+}
+
+fun printAndAddLine(line: String, stringBuilder: StringBuilder) {
+    println(line)
+    stringBuilder.appendLine(line)
 }
 
 val File.relativePath: String
@@ -134,15 +144,15 @@ fun createSizeBreakdown(byteCount: Long): String {
     val sb = StringBuilder("$byteCount bytes\n")
 
     if (byteCount > 1024) {
-        sb.appendLine("%.3f KB".format(byteCount / 1024f))
+        sb.appendLine("%.3f KiB".format(byteCount / 1024f))
     }
 
     if (byteCount > 1048576) {
-        sb.appendLine("%.3f MB".format(byteCount / 1048576f))
+        sb.appendLine("%.3f MiB".format(byteCount / 1048576f))
     }
 
     if (byteCount > 1073741824) {
-        sb.appendLine("%.3f GB".format(byteCount / 1073741824f))
+        sb.appendLine("%.3f GiB".format(byteCount / 1073741824f))
     }
 
     return sb.toString()
