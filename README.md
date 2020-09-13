@@ -1,1 +1,0 @@
-VRAM_Calculator
