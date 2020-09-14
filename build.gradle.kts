@@ -100,6 +100,7 @@ Original script by Dark Revenant. Transcoded to Kotlin and edited to show more i
                         .appendln("showSkippedFiles=false")
                         .appendln("showCountedFiles=true")
                         .appendln("showPerformance=false")
+                        .appendln("showGraphicsLibInfo=false")
                         .toString()
                 )
         }
@@ -113,4 +114,5 @@ application {
 dependencies {
     implementation(kotlin("stdlib-jdk7"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
+    implementation("com.github.doyaaaaaken:kotlin-csv-jvm:0.11.0")
 }
