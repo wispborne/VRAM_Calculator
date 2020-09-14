@@ -1,4 +1,5 @@
 import java.io.File
+import java.util.*
 import javax.imageio.ImageIO
 import kotlin.math.ceil
 import kotlin.math.roundToLong
@@ -13,13 +14,17 @@ import kotlin.math.roundToLong
 
 const val VANILLA_BACKGROUND_WIDTH = 2048
 const val VANILLA_BACKGROUND_TEXTURE_SIZE_IN_BYTES = 12582912f
+const val VANILLA_GAME_VRAM_USAGE_IN_BYTES =
+    433586176 // 0.9.1a, per https://fractalsoftworks.com/forum/index.php?topic=8726.0
 
 //val gameModsFolder = File("C:\\Program Files (x86)\\Fractal Softworks\\Starsector\\mods")
-val gameModsFolder = File(System.getProperty("user.dir")).parentFile
+val currentFolder = File(System.getProperty("user.dir"))
+val gameModsFolder = currentFolder.parentFile
 
 fun main(args: Array<String>) {
-    val showSkippedFiles = false
-    val showCountedFiles = true
+    val properties = Properties().apply { load(File(currentFolder, "config.properties").bufferedReader()) }
+    val showSkippedFiles = properties.getProperty("showSkippedFiles")?.toBoolean() ?: false
+    val showCountedFiles = properties.getProperty("showCountedFiles")?.toBoolean() ?: true
 
     val progressText = StringBuilder()
     val summaryText = StringBuilder()
@@ -118,8 +123,11 @@ fun main(args: Array<String>) {
 
     printAndAddLine("\n", progressText)
     summaryText.appendLine("-------------")
-    summaryText.appendLine("Total Modlist")
+    summaryText.appendLine("Total Modlist VRAM use")
     summaryText.appendLine(createSizeBreakdown(totalBytes))
+    summaryText.appendLine("Total Modlist + Vanilla VRAM Use")
+    summaryText.appendLine(createSizeBreakdown(totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES))
+    summaryText.appendLine("*This is only an estimate of VRAM use and actual use may be higher.*")
 
     println(summaryText.toString())
     val outputFile = File("$gameModsFolder/mods_VRAM_usage.txt")
