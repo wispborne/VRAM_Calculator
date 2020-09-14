@@ -163,7 +163,8 @@ suspend fun main(args: Array<String>) {
 
         summaryText.appendLine()
         summaryText.appendLine("${modFolder.name} (${filesInMod.count()} images)")
-        summaryText.appendLine(totalBytesForMod.asReadableSize + " (${totalBytesWithoutMaps.asReadableSize} without maps)")
+        summaryText.appendLine(totalBytesForMod.asReadableSize)
+        summaryText.appendLine("${totalBytesWithoutMaps.asReadableSize} without maps")
     }
 
     if (showPerformance) printAndAddLine(
@@ -175,14 +176,16 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine()
     summaryText.appendLine("-------------")
     summaryText.appendLine("Total Modlist VRAM use")
-    summaryText.appendLine(totalBytes.asReadableSize + " (${totalBytesWithGfxLibConf.asReadableSize} without maps)")
+    summaryText.appendLine(totalBytes.asReadableSize)
+    summaryText.appendLine("${totalBytesWithGfxLibConf.asReadableSize} without maps")
 
     val totalBytesPlusVanillaUse = totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES
     val totalBytesPlusVanillaUseWithGfxLibConf = totalBytesWithGfxLibConf + VANILLA_GAME_VRAM_USAGE_IN_BYTES
 
     summaryText.appendLine()
     summaryText.appendLine("Total Modlist + Vanilla VRAM Use")
-    summaryText.appendLine(totalBytesPlusVanillaUse.asReadableSize + " (${totalBytesPlusVanillaUseWithGfxLibConf.asReadableSize} without maps)")
+    summaryText.appendLine(totalBytesPlusVanillaUse.asReadableSize)
+    summaryText.appendLine("${totalBytesPlusVanillaUseWithGfxLibConf.asReadableSize} without maps")
 
     summaryText.appendLine()
     summaryText.appendLine("*This is only an estimate of VRAM use and actual use may be higher.*")
@@ -259,13 +262,13 @@ val Long.asReadableGiB: String?
     get() = if (this > 1073741824f) "%.3f GiB".format(this / 1073741824f) else null
 
 val Long.asReadableSize: String
-    get() =
-        when {
-            this.asReadableGiB != null -> this.asReadableGiB!!
-            this.asReadableMiB != null -> this.asReadableMiB!!
-            this.asReadableKiB != null -> this.asReadableKiB!!
-            else -> this.asReadableBytes
-        }
+    get() = "%.3f MiB".format(this / 1048576f)
+//        when {
+//            this.asReadableGiB != null -> this.asReadableGiB!!
+//            this.asReadableMiB != null -> this.asReadableMiB!!
+//            this.asReadableKiB != null -> this.asReadableKiB!!
+//            else -> this.asReadableBytes
+//        }
 
 
 suspend fun <A, B> Iterable<A>.parallelMap(f: suspend (A) -> B): List<B> = coroutineScope {
