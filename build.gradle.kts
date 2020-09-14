@@ -33,7 +33,8 @@ tasks {
 
         // Add JAR dependencies to the JAR
         configurations.runtimeClasspath.get()
-            .filter { it.name in "kotlin-stdlib-$kotlinVersion.jar" }
+            .filter { !it.isDirectory }
+//            .filter { it.name in "kotlin-stdlib-$kotlinVersion.jar" }
             .map { zipTree(it) }
             .also { from(it) }
 
@@ -48,8 +49,7 @@ IF NOT EXIST $relativeJavaExePath (
     ECHO Place $toolname folder in Starsector's mods folder.
     pause
 ) ELSE (
- start "" "$relativeJavaExePath" -jar ./$jarFileName
- pause
+ "$relativeJavaExePath" -jar ./$jarFileName
 )
 """
                         )
@@ -77,8 +77,9 @@ Changelog
 1.2.0
 Image channels are now accurately detected for all known cases, improving accuracy (now on par with original Python script).
 Files with '_CURRENTLY_UNUSED' in the name are ignored.
-Added configuration file.
+Added configuration file for display printouts and script performance data.
 Converted to Kotlin, added .bat and .sh launchers.
+Greatly increased performance by by multithreading file opening.
 
 1.1.0
 Backgrounds are now only counted if larger than vanilla size and only by their increase over vanilla.
@@ -98,6 +99,7 @@ Original script by Dark Revenant. Transcoded to Kotlin and edited to show more i
                     StringBuilder()
                         .appendln("showSkippedFiles=false")
                         .appendln("showCountedFiles=true")
+                        .appendln("showPerformance=false")
                         .toString()
                 )
         }
@@ -110,4 +112,5 @@ application {
 
 dependencies {
     implementation(kotlin("stdlib-jdk7"))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
 }

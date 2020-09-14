@@ -9,8 +9,9 @@ Changelog
 1.2.0
 Image channels are now accurately detected for all known cases, improving accuracy (now on par with original Python script).
 Files with '_CURRENTLY_UNUSED' in the name are ignored.
-Added configuration file.
+Added configuration file for display printouts and script performance data.
 Converted to Kotlin, added .bat and .sh launchers.
+Greatly increased performance by by multithreading file opening.
 
 1.1.0
 Backgrounds are now only counted if larger than vanilla size and only by their increase over vanilla.

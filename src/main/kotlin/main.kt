@@ -1,3 +1,4 @@
+import kotlinx.coroutines.*
 import java.io.File
 import java.util.*
 import javax.imageio.ImageIO
@@ -21,14 +22,16 @@ const val VANILLA_GAME_VRAM_USAGE_IN_BYTES =
 val currentFolder = File(System.getProperty("user.dir"))
 val gameModsFolder = currentFolder.parentFile
 
-fun main(args: Array<String>) {
+suspend fun main(args: Array<String>) {
     val properties = Properties().apply { load(File(currentFolder, "config.properties").bufferedReader()) }
     val showSkippedFiles = properties.getProperty("showSkippedFiles")?.toBoolean() ?: false
     val showCountedFiles = properties.getProperty("showCountedFiles")?.toBoolean() ?: true
+    val showPerformance = properties.getProperty("showPerformance")?.toBoolean() ?: false
 
     val progressText = StringBuilder()
     val summaryText = StringBuilder()
     var totalBytes = 0L
+    val startTime = Date().time
 
     if (!gameModsFolder.exists()) {
         println("This doesn't exist! ${gameModsFolder.absolutePath}")
@@ -44,6 +47,7 @@ fun main(args: Array<String>) {
 
     for (modFolder in modFolders) {
         printAndAddLine("Folder: ${modFolder.name}", progressText)
+        val startTimeForMod = Date().time
 
         val filesInMod =
             modFolder.walkTopDown()
@@ -51,13 +55,15 @@ fun main(args: Array<String>) {
                 .toList()
 
         val modImages = filesInMod
-            .mapNotNull { file ->
+            .parallelMap { file ->
                 val image = try {
-                    ImageIO.read(file)!!
+                    withContext(Dispatchers.IO) {
+                        ImageIO.read(file)!!
+                    }
                 } catch (e: Exception) {
                     if (showSkippedFiles)
                         printAndAddLine("Skipped non-image ${file.relativePath} (${e.message})", progressText)
-                    return@mapNotNull null
+                    return@parallelMap null
                 }
 
                 ModImage(
@@ -72,6 +78,13 @@ fun main(args: Array<String>) {
                     }
                 )
             }
+            .filterNotNull()
+
+        val timeFinishedGettingFileData = Date().time
+        if (showPerformance) printAndAddLine(
+            "Finished getting file data for ${modFolder.name} in ${(timeFinishedGettingFileData - startTimeForMod) / 1000} seconds",
+            progressText
+        )
 
         val filesToSumUp = modImages.toMutableList()
 
@@ -100,7 +113,7 @@ fun main(args: Array<String>) {
         )
 
         filesToSumUp.forEach { image ->
-            printAndAddLine(
+            if (showCountedFiles) printAndAddLine(
                 "${image.file.relativePath} - TexHeight: ${image.textureHeight}, " +
                         "TexWidth: ${image.textureWidth}, " +
                         "Channels: ${image.bitsInAllChannels}, " +
@@ -113,6 +126,11 @@ fun main(args: Array<String>) {
         val totalBytesForMod = filesToSumUp.sumByDouble { it.bytesUsed.toDouble() }.roundToLong()
         totalBytes += totalBytesForMod
 
+        if (showPerformance) printAndAddLine(
+            "Finished calculating file sizes for ${modFolder.name} in ${(Date().time - timeFinishedGettingFileData) / 1000} seconds",
+            progressText
+        )
+
         if (totalBytesForMod == 0L) {
             continue
         }
@@ -120,6 +138,11 @@ fun main(args: Array<String>) {
         summaryText.appendLine("${modFolder.name} (${filesInMod.count()} images)")
         summaryText.appendLine(createSizeBreakdown(totalBytesForMod))
     }
+
+    if (showPerformance) printAndAddLine(
+        "Finished run in ${(Date().time - startTime) / 1000} seconds",
+        progressText
+    )
 
     printAndAddLine("\n", progressText)
     summaryText.appendLine("-------------")
@@ -133,7 +156,7 @@ fun main(args: Array<String>) {
     val outputFile = File("$gameModsFolder/mods_VRAM_usage.txt")
     outputFile.delete()
     outputFile.createNewFile()
-    if (showCountedFiles) outputFile.writeText(progressText.toString())
+    outputFile.writeText(progressText.toString())
     outputFile.appendText(summaryText.toString())
 
     println("\nFile written to ${outputFile.name}\nPress any key to continue.")
@@ -164,6 +187,10 @@ fun createSizeBreakdown(byteCount: Long): String {
     }
 
     return sb.toString()
+}
+
+suspend fun <A, B> Iterable<A>.parallelMap(f: suspend (A) -> B): List<B> = coroutineScope {
+    mapNotNull { async { f(it) } }.awaitAll()
 }
 
 /**
