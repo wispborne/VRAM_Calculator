@@ -5,5 +5,6 @@ IF NOT EXIST ../../jre/bin/java.exe (
     pause
 ) ELSE (
  "../../jre/bin/java.exe" -jar ./VRAM-Counter.jar
+ pause
 )
 

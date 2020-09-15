@@ -50,6 +50,7 @@ IF NOT EXIST $relativeJavaExePath (
     pause
 ) ELSE (
  "$relativeJavaExePath" -jar ./$jarFileName
+ pause
 )
 """
                         )
@@ -99,8 +100,11 @@ Original script by Dark Revenant. Transcoded to Kotlin and edited to show more i
                     StringBuilder()
                         .appendln("showSkippedFiles=false")
                         .appendln("showCountedFiles=true")
-                        .appendln("showPerformance=false")
-                        .appendln("showGraphicsLibInfo=false")
+                        .appendln("showPerformance=true")
+                        .appendln("showGfxLibDebugOutput=false")
+                        .appendln("areGfxLibNormalMapsEnabled=false")
+                        .appendln("areGfxLibMaterialMapsEnabled=false")
+                        .appendln("areGfxLibSurfaceMapsEnabled=false")
                         .toString()
                 )
         }
@@ -114,5 +118,7 @@ application {
 dependencies {
     implementation(kotlin("stdlib-jdk7"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
-    implementation("com.github.doyaaaaaken:kotlin-csv-jvm:0.11.0")
+    implementation("de.siegmar:fastcsv:1.0.3")
+    // Comnpiled for Java 8, doesn't work
+//    implementation("com.github.doyaaaaaken:kotlin-csv-jvm:0.11.0")
 }

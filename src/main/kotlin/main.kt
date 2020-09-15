@@ -1,10 +1,8 @@
-import com.github.doyaaaaaken.kotlincsv.client.CsvReader
-import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
+import de.siegmar.fastcsv.reader.CsvReader
 import kotlinx.coroutines.*
 import java.io.File
 import java.util.*
 import javax.imageio.ImageIO
-import kotlin.math.ceil
 import kotlin.math.roundToLong
 
 
@@ -22,7 +20,7 @@ const val VANILLA_GAME_VRAM_USAGE_IN_BYTES =
 
 //val gameModsFolder = File("C:\\Program Files (x86)\\Fractal Softworks\\Starsector\\mods")
 val currentFolder = File(System.getProperty("user.dir"))
-val gameModsFolder = currentFolder.parentFile
+val gameModsFolder: File = currentFolder.parentFile
 
 suspend fun main(args: Array<String>) {
     val properties = runCatching {
@@ -30,8 +28,11 @@ suspend fun main(args: Array<String>) {
     }.getOrNull()
     val showSkippedFiles = properties?.getProperty("showSkippedFiles")?.toBoolean() ?: false
     val showCountedFiles = properties?.getProperty("showCountedFiles")?.toBoolean() ?: true
-    val showPerformance = properties?.getProperty("showPerformance")?.toBoolean() ?: false
-    val showGraphicsLibInfo = properties?.getProperty("showGraphicsLibInfo")?.toBoolean() ?: false
+    val showPerformance = properties?.getProperty("showPerformance")?.toBoolean() ?: true
+    val showGfxLibDebugOutput = properties?.getProperty("showGfxLibDebugOutput")?.toBoolean() ?: false
+    val areGfxLibNormalMapsEnabled = properties?.getProperty("areGfxLibNormalMapsEnabled")?.toBoolean() ?: false
+    val areGfxLibMaterialMapsEnabled = properties?.getProperty("areGfxLibMaterialMapsEnabled")?.toBoolean() ?: false
+    val areGfxLibSurfaceMapsEnabled = properties?.getProperty("areGfxLibSurfaceMapsEnabled")?.toBoolean() ?: false
 
     val progressText = StringBuilder()
     val summaryText = StringBuilder()
@@ -39,9 +40,9 @@ suspend fun main(args: Array<String>) {
     var totalBytesWithGfxLibConf = 0L
     val startTime = Date().time
 
-    val csvReader = csvReader {
-        skipEmptyLine = true
-        skipMissMatchedRow = true
+    val csvReader = CsvReader().apply {
+        setSkipEmptyRows(true)
+        setErrorOnDifferentFieldCount(false)
     }
 
     if (!gameModsFolder.exists()) {
@@ -57,7 +58,7 @@ suspend fun main(args: Array<String>) {
     printAndAddLine("Mods folder: ${gameModsFolder.absolutePath}", progressText)
 
     for (modFolder in modFolders) {
-        printAndAddLine("Folder: ${modFolder.name}", progressText)
+        printAndAddLine("\nFolder: ${modFolder.name}", progressText)
         val startTimeForMod = Date().time
 
         val filesInMod =
@@ -65,8 +66,16 @@ suspend fun main(args: Array<String>) {
                 .filter { it.isFile }
                 .toList()
 
-        val graphicsLibDataForMod =
-            getGraphicsLibDataForMod(filesInMod, csvReader, progressText, showGraphicsLibInfo)
+        val graphicsLibFilesToExcludeForMod =
+            graphicsLibFilesToExcludeForMod(
+                filesInMod = filesInMod,
+                csvReader = csvReader,
+                progressText = progressText,
+                showGfxLibDebugOutput = showGfxLibDebugOutput,
+                areGfxLibNormalMapsEnabled = areGfxLibNormalMapsEnabled,
+                areGfxLibMaterialMapsEnabled = areGfxLibMaterialMapsEnabled,
+                areGfxLibSurfaceMapsEnabled = areGfxLibSurfaceMapsEnabled
+            )
 
         val timeFinishedGettingGraphicsLibData = Date().time
         if (showPerformance) printAndAddLine(
@@ -92,9 +101,9 @@ suspend fun main(args: Array<String>) {
                     textureWidth = if (image.height == 1) 1 else Integer.highestOneBit(image.height - 1) * 2,
                     bitsInAllChannels = image.colorModel.componentSize.toList(),
                     imageType = when {
-                        file.relativePath.contains("backgrounds") -> ImageType.Background
-                        file.relativePath.contains("_CURRENTLY_UNUSED") -> ImageType.Unused
-                        else -> ImageType.Texture
+                        file.relativePath.contains("backgrounds") -> ModImage.ImageType.Background
+                        file.relativePath.contains("_CURRENTLY_UNUSED") -> ModImage.ImageType.Unused
+                        else -> ModImage.ImageType.Texture
                     }
                 )
             }
@@ -109,7 +118,7 @@ suspend fun main(args: Array<String>) {
         val filesToSumUp = modImages.toMutableList()
 
         filesToSumUp.removeAll(modImages
-            .filter { it.imageType == ImageType.Unused }
+            .filter { it.imageType == ModImage.ImageType.Unused }
             .also { if (it.any() && showSkippedFiles) printAndAddLine("Skipping unused files", progressText) }
             .onEach { printAndAddLine("  ${it.file.relativePath}", progressText) }
         )
@@ -118,10 +127,10 @@ suspend fun main(args: Array<String>) {
         // The game only loads one background at a time and vanilla always has one loaded.
         // Therefore, a mod only increases the VRAM use by the size difference of the largest background over vanilla.
         val largestBackgroundBiggerThanVanilla = modImages
-            .filter { it.imageType == ImageType.Background && it.textureWidth > VANILLA_BACKGROUND_WIDTH }
+            .filter { it.imageType == ModImage.ImageType.Background && it.textureWidth > VANILLA_BACKGROUND_WIDTH }
             .maxByOrNull { it.bytesUsed }
         filesToSumUp.removeAll(
-            modImages.filter { it.imageType == ImageType.Background && it != largestBackgroundBiggerThanVanilla }
+            modImages.filter { it.imageType == ModImage.ImageType.Background && it != largestBackgroundBiggerThanVanilla }
                 .also {
                     if (it.any())
                         printAndAddLine(
@@ -145,8 +154,8 @@ suspend fun main(args: Array<String>) {
 
         val totalBytesForMod = filesToSumUp.sumByDouble { it.bytesUsed.toDouble() }.roundToLong()
         val filesWithoutMaps =
-            if (graphicsLibDataForMod != null)
-                filesToSumUp.filterNot { it.file.relativeTo(modFolder).path in graphicsLibDataForMod.map { it.relativeFilePath } }
+            if (graphicsLibFilesToExcludeForMod != null)
+                filesToSumUp.filterNot { it.file.relativeTo(modFolder) in graphicsLibFilesToExcludeForMod.map { File(it.relativeFilePath) } }
             else filesToSumUp
         val totalBytesWithoutMaps = filesWithoutMaps.sumByDouble { it.bytesUsed.toDouble() }.roundToLong()
         totalBytes += totalBytesForMod
@@ -163,8 +172,8 @@ suspend fun main(args: Array<String>) {
 
         summaryText.appendLine()
         summaryText.appendLine("${modFolder.name} (${filesInMod.count()} images)")
-        summaryText.appendLine(totalBytesForMod.asReadableSize)
-        summaryText.appendLine("${totalBytesWithoutMaps.asReadableSize} without maps")
+        summaryText.appendLine(totalBytesForMod.asReadableSize + " - with GraphicsLib")
+        summaryText.appendLine(totalBytesWithoutMaps.asReadableSize + " - with specified GraphicsLib settings")
     }
 
     if (showPerformance) printAndAddLine(
@@ -176,16 +185,16 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine()
     summaryText.appendLine("-------------")
     summaryText.appendLine("Total Modlist VRAM use")
-    summaryText.appendLine(totalBytes.asReadableSize)
-    summaryText.appendLine("${totalBytesWithGfxLibConf.asReadableSize} without maps")
+    summaryText.appendLine(totalBytes.asReadableSize + " - with GraphicsLib")
+    summaryText.appendLine(totalBytesWithGfxLibConf.asReadableSize + " - with specified GraphicsLib settings")
 
     val totalBytesPlusVanillaUse = totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES
     val totalBytesPlusVanillaUseWithGfxLibConf = totalBytesWithGfxLibConf + VANILLA_GAME_VRAM_USAGE_IN_BYTES
 
     summaryText.appendLine()
     summaryText.appendLine("Total Modlist + Vanilla VRAM Use")
-    summaryText.appendLine(totalBytesPlusVanillaUse.asReadableSize)
-    summaryText.appendLine("${totalBytesPlusVanillaUseWithGfxLibConf.asReadableSize} without maps")
+    summaryText.appendLine(totalBytesPlusVanillaUse.asReadableSize + " - with GraphicsLib")
+    summaryText.appendLine(totalBytesPlusVanillaUseWithGfxLibConf.asReadableSize + " - with specified GraphicsLib settings")
 
     summaryText.appendLine()
     summaryText.appendLine("*This is only an estimate of VRAM use and actual use may be higher.*")
@@ -197,25 +206,30 @@ suspend fun main(args: Array<String>) {
     outputFile.writeText(progressText.toString())
     outputFile.appendText(summaryText.toString())
 
-    println("\nFile written to ${outputFile.name}\nPress any key to continue.")
+    println("\nFile written to ${outputFile.absolutePath}\nPress any key to continue.")
     readLine()
 }
 
-private fun getGraphicsLibDataForMod(
+private fun graphicsLibFilesToExcludeForMod(
     filesInMod: List<File>,
     csvReader: CsvReader,
     progressText: StringBuilder,
-    showGraphicsLibInfo: Boolean
+    showGfxLibDebugOutput: Boolean,
+    areGfxLibNormalMapsEnabled: Boolean,
+    areGfxLibMaterialMapsEnabled: Boolean,
+    areGfxLibSurfaceMapsEnabled: Boolean
 ): List<GraphicsLibInfo>? {
     return filesInMod
         .filter { it.name.endsWith(".csv") }
         .mapNotNull { file ->
-            runCatching { csvReader.readAll(file) }
+            runCatching { csvReader.read(file.reader()) }
                 .recover {
                     printAndAddLine("Unable to read ${file.relativePath}: ${it.message}", progressText)
                     null
                 }
                 .getOrNull()
+                ?.rows
+                ?.map { it.fields }
         }
         // Look for a CSV with a header row containing certain column names
         .firstOrNull {
@@ -224,20 +238,32 @@ private fun getGraphicsLibDataForMod(
         ?.run {
             val mapColumn = this.first().indexOf("map")
             val pathColumn = this.first().indexOf("path")
-            this
-                .mapNotNull {
+
+            this.mapNotNull {
+                try {
                     val mapType = when (it[mapColumn]) {
                         "normal" -> GraphicsLibInfo.MapType.Normal
                         "material" -> GraphicsLibInfo.MapType.Material
                         "surface" -> GraphicsLibInfo.MapType.Surface
                         else -> return@mapNotNull null
                     }
-                    val path = it[pathColumn]
+                    val path = it[pathColumn].trim()
                     GraphicsLibInfo(mapType, path)
+                } catch (e: Exception) {
+                    printAndAddLine("$this - ${e.message}", progressText)
+                    null
                 }
+            }
+        }
+        ?.filter {
+            when (it.mapType) {
+                GraphicsLibInfo.MapType.Normal -> !areGfxLibNormalMapsEnabled
+                GraphicsLibInfo.MapType.Material -> !areGfxLibMaterialMapsEnabled
+                GraphicsLibInfo.MapType.Surface -> !areGfxLibSurfaceMapsEnabled
+            }
         }
         .also {
-            if (showGraphicsLibInfo) it?.forEach { info -> printAndAddLine(info.toString(), progressText) }
+            if (showGfxLibDebugOutput) it?.forEach { info -> printAndAddLine(info.toString(), progressText) }
         }
 }
 
@@ -249,74 +275,9 @@ fun printAndAddLine(line: String, stringBuilder: StringBuilder) {
 val File.relativePath: String
     get() = this.toRelativeString(gameModsFolder)
 
-val Long.asReadableBytes: String
-    get() = "$this bytes"
-
-val Long.asReadableKiB: String?
-    get() = if (this > 1024) "%.3f KiB".format(this / 1024f) else null
-
-val Long.asReadableMiB: String?
-    get() = if (this > 1048576f) "%.3f MiB".format(this / 1048576f) else null
-
-val Long.asReadableGiB: String?
-    get() = if (this > 1073741824f) "%.3f GiB".format(this / 1073741824f) else null
-
 val Long.asReadableSize: String
     get() = "%.3f MiB".format(this / 1048576f)
-//        when {
-//            this.asReadableGiB != null -> this.asReadableGiB!!
-//            this.asReadableMiB != null -> this.asReadableMiB!!
-//            this.asReadableKiB != null -> this.asReadableKiB!!
-//            else -> this.asReadableBytes
-//        }
-
 
 suspend fun <A, B> Iterable<A>.parallelMap(f: suspend (A) -> B): List<B> = coroutineScope {
     mapNotNull { async { f(it) } }.awaitAll()
-}
-
-/**
- * @param textureHeight Next highest power of two
- * @param textureWidth Next highest power of two
- */
-data class ModImage(
-    val file: File,
-    val textureHeight: Int,
-    val textureWidth: Int,
-    val bitsInAllChannels: List<Int>,
-    val imageType: ImageType
-) {
-    /**
-     * Textures are mipmapped and therefore use 125% memory. Backgrounds are not.
-     */
-    val multiplier = if (imageType == ImageType.Background) 1f else 4f / 3f
-    val bytesUsed by lazy {
-        ceil( // Round up
-            (textureHeight *
-                    textureWidth *
-                    (bitsInAllChannels.sum() / 8) *
-                    multiplier) -
-                    // Number of bytes in a vanilla background image
-                    // Only count any excess toward the mod's VRAM hit
-                    if (imageType == ImageType.Background) VANILLA_BACKGROUND_TEXTURE_SIZE_IN_BYTES else 0f
-        )
-            .toLong()
-    }
-}
-
-enum class ImageType {
-    Texture,
-    Background,
-    Unused
-}
-
-data class GraphicsLibInfo(
-    val mapType: MapType,
-    val relativeFilePath: String
-) {
-    enum class MapType {
-        Normal,
-        Material,
-        Surface
-    }
 }
