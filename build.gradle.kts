@@ -8,7 +8,7 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.3.0"
+val vramCounterVersion = "1.4.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val relativeJavaExePath = "../../jre/bin/java.exe"
@@ -79,6 +79,11 @@ Not-Windows: Use .sh file
 ![screenshot](screenshot.png)
 
 ## Changelog
+
+1.4.0
+
+- Total estimated use no longer counts images with the same relative path and name multiple times.
+  - So if Mods A and B both have /graphics/image.png, both will have the size counted in the per-mod display, but it will be only counted once in the total.
 
 1.3.0
 

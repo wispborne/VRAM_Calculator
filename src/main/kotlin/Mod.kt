@@ -1,10 +1,11 @@
-import java.io.File
+import kotlin.math.roundToLong
 
 data class Mod(
-    val id: String,
-    val folder: File,
-    val name: String,
-    val version: String
+    val info: ModInfo,
+    val images: List<ModImage>
 ) {
-    val formattedName = "$name $version ($id)"
+
+    val totalBytesForMod by lazy {
+        images.sumByDouble { it.bytesUsed.toDouble() }.roundToLong()
+    }
 }
