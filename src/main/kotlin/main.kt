@@ -1,3 +1,7 @@
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.core.json.JsonReadFeature
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.json.JsonMapper
 import de.siegmar.fastcsv.reader.CsvReader
 import kotlinx.coroutines.*
 import java.io.File
@@ -17,6 +21,7 @@ const val VANILLA_BACKGROUND_WIDTH = 2048
 const val VANILLA_BACKGROUND_TEXTURE_SIZE_IN_BYTES = 12582912f
 const val VANILLA_GAME_VRAM_USAGE_IN_BYTES =
     433586176 // 0.9.1a, per https://fractalsoftworks.com/forum/index.php?topic=8726.0
+const val OUTPUT_LABEL_WIDTH = 20
 
 //val gameModsFolder = File("C:\\Program Files (x86)\\Fractal Softworks\\Starsector\\mods")
 val currentFolder = File(System.getProperty("user.dir"))
@@ -36,7 +41,7 @@ suspend fun main(args: Array<String>) {
 
     val progressText = StringBuilder()
     val summaryText = StringBuilder()
-    var totalBytes = 0L
+    var totalBytesOfEnabledMods = 0L
     var totalBytesWithGfxLibConf = 0L
     val startTime = Date().time
 
@@ -45,24 +50,45 @@ suspend fun main(args: Array<String>) {
         setErrorOnDifferentFieldCount(false)
     }
 
+    val jsonMapper = JsonMapper.builder()
+        .defaultLeniency(true)
+        .enable(
+            JsonReadFeature.ALLOW_JAVA_COMMENTS, JsonReadFeature.ALLOW_SINGLE_QUOTES,
+            JsonReadFeature.ALLOW_YAML_COMMENTS, JsonReadFeature.ALLOW_MISSING_VALUES,
+            JsonReadFeature.ALLOW_TRAILING_COMMA, JsonReadFeature.ALLOW_UNQUOTED_FIELD_NAMES,
+            JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS,
+            JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER,
+            JsonReadFeature.ALLOW_LEADING_DECIMAL_POINT_FOR_NUMBERS
+        )
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build()
+
     if (!gameModsFolder.exists()) {
         println("This doesn't exist! ${gameModsFolder.absolutePath}")
         readLine()
         return
     }
 
-    val modFolders = gameModsFolder
+    val enabledModIds = getUserEnabledModIds(jsonMapper, progressText)
+    if (enabledModIds != null) printAndAddLine(
+        "Enabled Mods:\n${enabledModIds.joinToString(separator = "\n")}",
+        progressText
+    )
+
+    val mods = gameModsFolder
         .listFiles()!!
         .filter { it.isDirectory }
+        .mapNotNull {
+            getModInfo(jsonMapper = jsonMapper, modFolder = it, progressText = progressText)
+        }
 
     printAndAddLine("Mods folder: ${gameModsFolder.absolutePath}", progressText)
 
-    for (modFolder in modFolders) {
-        printAndAddLine("\nFolder: ${modFolder.name}", progressText)
+    for (mod in mods) {
+        printAndAddLine("\nFolder: ${mod.name}", progressText)
         val startTimeForMod = Date().time
 
         val filesInMod =
-            modFolder.walkTopDown()
+            mod.folder.walkTopDown()
                 .filter { it.isFile }
                 .toList()
 
@@ -79,7 +105,7 @@ suspend fun main(args: Array<String>) {
 
         val timeFinishedGettingGraphicsLibData = Date().time
         if (showPerformance) printAndAddLine(
-            "Finished getting graphicslib data for ${modFolder.name} in ${(timeFinishedGettingGraphicsLibData - startTimeForMod)} ms",
+            "Finished getting graphicslib data for ${mod.name} in ${(timeFinishedGettingGraphicsLibData - startTimeForMod)} ms",
             progressText
         )
 
@@ -111,7 +137,7 @@ suspend fun main(args: Array<String>) {
 
         val timeFinishedGettingFileData = Date().time
         if (showPerformance) printAndAddLine(
-            "Finished getting file data for ${modFolder.name} in ${(timeFinishedGettingFileData - timeFinishedGettingGraphicsLibData)} ms",
+            "Finished getting file data for ${mod.formattedName} in ${(timeFinishedGettingFileData - timeFinishedGettingGraphicsLibData)} ms",
             progressText
         )
 
@@ -155,14 +181,14 @@ suspend fun main(args: Array<String>) {
         val totalBytesForMod = filesToSumUp.sumByDouble { it.bytesUsed.toDouble() }.roundToLong()
         val filesWithoutMaps =
             if (graphicsLibFilesToExcludeForMod != null)
-                filesToSumUp.filterNot { it.file.relativeTo(modFolder) in graphicsLibFilesToExcludeForMod.map { File(it.relativeFilePath) } }
+                filesToSumUp.filterNot { it.file.relativeTo(mod.folder) in graphicsLibFilesToExcludeForMod.map { File(it.relativeFilePath) } }
             else filesToSumUp
         val totalBytesWithoutMaps = filesWithoutMaps.sumByDouble { it.bytesUsed.toDouble() }.roundToLong()
-        totalBytes += totalBytesForMod
         totalBytesWithGfxLibConf += totalBytesWithoutMaps
+        totalBytesOfEnabledMods += if (mod.id in enabledModIds ?: emptyList()) totalBytesWithoutMaps else 0L
 
         if (showPerformance) printAndAddLine(
-            "Finished calculating file sizes for ${modFolder.name} in ${(Date().time - timeFinishedGettingFileData)} ms",
+            "Finished calculating file sizes for ${mod.formattedName} in ${(Date().time - timeFinishedGettingFileData)} ms",
             progressText
         )
 
@@ -171,9 +197,8 @@ suspend fun main(args: Array<String>) {
         }
 
         summaryText.appendLine()
-        summaryText.appendLine("${modFolder.name} (${filesInMod.count()} images)")
-        summaryText.appendLine(totalBytesForMod.asReadableSize + " - with GraphicsLib")
-        summaryText.appendLine(totalBytesWithoutMaps.asReadableSize + " - with specified GraphicsLib settings")
+        summaryText.appendLine("${mod.formattedName} (${modImages.count()} images)")
+        summaryText.appendLine(totalBytesWithoutMaps.asReadableSize)
     }
 
     if (showPerformance) printAndAddLine(
@@ -184,23 +209,21 @@ suspend fun main(args: Array<String>) {
     printAndAddLine("\n", progressText)
     summaryText.appendLine()
     summaryText.appendLine("-------------")
-    summaryText.appendLine("Total Modlist VRAM use")
-    summaryText.appendLine(totalBytes.asReadableSize + " - with GraphicsLib")
-    summaryText.appendLine(totalBytesWithGfxLibConf.asReadableSize + " - with specified GraphicsLib settings")
-
-    val totalBytesPlusVanillaUse = totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES
-    val totalBytesPlusVanillaUseWithGfxLibConf = totalBytesWithGfxLibConf + VANILLA_GAME_VRAM_USAGE_IN_BYTES
-
+    summaryText.appendLine("VRAM Use Estimates")
+    summaryText.appendLine("Edit 'config.properties' to choose your GraphicsLib settings.")
     summaryText.appendLine()
-    summaryText.appendLine("Total Modlist + Vanilla VRAM Use")
-    summaryText.appendLine(totalBytesPlusVanillaUse.asReadableSize + " - with GraphicsLib")
-    summaryText.appendLine(totalBytesPlusVanillaUseWithGfxLibConf.asReadableSize + " - with specified GraphicsLib settings")
+
+    summaryText.appendLine("All Mod Folders".padEnd(OUTPUT_LABEL_WIDTH) + totalBytesWithGfxLibConf.asReadableSize)
+    summaryText.appendLine("Incl. Vanilla Usage".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytesWithGfxLibConf + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
+    summaryText.appendLine()
+    summaryText.appendLine("Enabled Mods Only".padEnd(OUTPUT_LABEL_WIDTH) + totalBytesOfEnabledMods.asReadableSize)
+    summaryText.appendLine("Incl. Vanilla Usage".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytesOfEnabledMods + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
 
     summaryText.appendLine()
     summaryText.appendLine("*This is only an estimate of VRAM use and actual use may be higher.*")
 
     println(summaryText.toString())
-    val outputFile = File("$gameModsFolder/mods_VRAM_usage.txt")
+    val outputFile = File("$currentFolder/VRAM_usage_of_mods.txt")
     outputFile.delete()
     outputFile.createNewFile()
     outputFile.writeText(progressText.toString())
@@ -266,6 +289,49 @@ private fun graphicsLibFilesToExcludeForMod(
             if (showGfxLibDebugOutput) it?.forEach { info -> printAndAddLine(info.toString(), progressText) }
         }
 }
+
+fun getUserEnabledModIds(jsonMapper: JsonMapper, progressText: StringBuilder): List<String>? {
+    val enabledModsJsonFile = currentFolder.parentFile?.listFiles()
+        ?.firstOrNull { it.name == "enabled_mods.json" }
+
+    if (enabledModsJsonFile == null || !enabledModsJsonFile.exists()) {
+        printAndAddLine("Unable to find 'enabled_mods.json'.", progressText)
+        return null
+    }
+
+    return try {
+        jsonMapper.readValue(enabledModsJsonFile, EnabledModsJsonModel::class.java).enabledMods
+    } catch (e: Exception) {
+        printAndAddLine(e.toString(), progressText)
+        null
+    }
+}
+
+fun getModInfo(jsonMapper: JsonMapper, modFolder: File, progressText: StringBuilder): Mod? {
+    return try {
+        modFolder.listFiles()
+            ?.firstOrNull { file -> file.name == "mod_info.json" }
+            ?.let { modInfoFile -> jsonMapper.readValue(modInfoFile, ModInfoJsonModel::class.java) }
+            ?.let {
+                Mod(
+                    id = it.id,
+                    folder = modFolder,
+                    name = it.name,
+                    version = it.version
+                )
+            }
+    } catch (e: Exception) {
+        printAndAddLine("Unable to find 'mod_info.json' in ${modFolder.absolutePath}.", progressText)
+        null
+    }
+}
+
+data class EnabledModsJsonModel(@JsonProperty("enabledMods") val enabledMods: List<String>)
+data class ModInfoJsonModel(
+    @JsonProperty("id") val id: String,
+    @JsonProperty("name") val name: String,
+    @JsonProperty("version") val version: String,
+)
 
 fun printAndAddLine(line: String, stringBuilder: StringBuilder) {
     println(line)
