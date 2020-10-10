@@ -8,7 +8,7 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.4.0"
+val vramCounterVersion = "1.5.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val relativeJavaExePath = "../../jre/bin/java.exe"
@@ -79,6 +79,12 @@ Not-Windows: Use .sh file
 ![screenshot](screenshot.png)
 
 ## Changelog
+
+1.5.0
+
+- Make it clearer what it and isn't counted when user only copy/pastes a single line from the output.
+- Add all enabled mods to the summary view.
+- Copy the summary to the clipboard so it may be easily pasted into chat.
 
 1.4.0
 

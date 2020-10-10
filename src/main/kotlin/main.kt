@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
 import de.siegmar.fastcsv.reader.CsvReader
 import kotlinx.coroutines.*
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 import java.io.File
 import java.util.*
 import javax.imageio.ImageIO
@@ -20,11 +22,14 @@ const val VANILLA_BACKGROUND_WIDTH = 2048
 const val VANILLA_BACKGROUND_TEXTURE_SIZE_IN_BYTES = 12582912f
 const val VANILLA_GAME_VRAM_USAGE_IN_BYTES =
     433586176 // 0.9.1a, per https://fractalsoftworks.com/forum/index.php?topic=8726.0
-const val OUTPUT_LABEL_WIDTH = 20
+const val OUTPUT_LABEL_WIDTH = 38
+const val UNUSED_SUFFIX = "_CURRENTLY_UNUSED"
+const val BACKGROUND_FOLDER_NAME = "backgrounds"
 
 //val gameModsFolder = File("C:\\Program Files (x86)\\Fractal Softworks\\Starsector\\mods")
 val currentFolder = File(System.getProperty("user.dir"))
 val gameModsFolder: File = currentFolder.parentFile
+
 
 suspend fun main(args: Array<String>) {
     val properties = runCatching {
@@ -39,6 +44,7 @@ suspend fun main(args: Array<String>) {
     val areGfxLibSurfaceMapsEnabled = properties?.getProperty("areGfxLibSurfaceMapsEnabled")?.toBoolean() ?: false
 
     val progressText = StringBuilder()
+    val modTotals = StringBuilder()
     val summaryText = StringBuilder()
     val startTime = Date().time
 
@@ -123,8 +129,8 @@ suspend fun main(args: Array<String>) {
                         textureWidth = if (image.height == 1) 1 else Integer.highestOneBit(image.height - 1) * 2,
                         bitsInAllChannels = image.colorModel.componentSize.toList(),
                         imageType = when {
-                            file.relativePath.contains("backgrounds") -> ModImage.ImageType.Background
-                            file.relativePath.contains("_CURRENTLY_UNUSED") -> ModImage.ImageType.Unused
+                            file.relativePath.contains(BACKGROUND_FOLDER_NAME) -> ModImage.ImageType.Background
+                            file.relativePath.contains(UNUSED_SUFFIX) -> ModImage.ImageType.Unused
                             else -> ModImage.ImageType.Texture
                         }
                     )
@@ -195,16 +201,16 @@ suspend fun main(args: Array<String>) {
                 progressText
             )
 
-            summaryText.appendLine()
-            summaryText.appendLine("${mod.info.formattedName} (${modImages.count()} images)")
-            summaryText.appendLine(mod.totalBytesForMod.asReadableSize)
+            modTotals.appendLine()
+            modTotals.appendLine("${mod.info.formattedName} (${modImages.count()} images)")
+            modTotals.appendLine(mod.totalBytesForMod.asReadableSize)
             mod
         }
 
+    val enabledMods = mods.filter { mod -> mod.info.id in (enabledModIds ?: emptyList()) }
     val totalBytes = mods.getBytesUsedByDedupedImages()
 
-    val totalBytesOfEnabledMods = mods
-        .filter { mod -> mod.info.id in (enabledModIds ?: emptyList()) }
+    val totalBytesOfEnabledMods = enabledMods
         .getBytesUsedByDedupedImages()
 
     if (showPerformance) printAndAddLine(
@@ -216,27 +222,38 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine()
     summaryText.appendLine("-------------")
     summaryText.appendLine("VRAM Use Estimates")
-    summaryText.appendLine("Edit 'config.properties' to choose your GraphicsLib settings.")
+    summaryText.appendLine()
+    summaryText.appendLine("Configuration")
+    summaryText.appendLine("  Enabled Mods")
+    summaryText.appendLine("    ${enabledMods.joinToString(separator = "\n    ") { it.info.formattedName }}")
+    summaryText.appendLine("  GraphicsLib")
+    summaryText.appendLine("    Normal Maps Enabled: $areGfxLibNormalMapsEnabled")
+    summaryText.appendLine("    Material Maps Enabled: $areGfxLibMaterialMapsEnabled")
+    summaryText.appendLine("    Surface Maps Enabled: $areGfxLibSurfaceMapsEnabled")
+    summaryText.appendLine("    Edit 'config.properties' to choose your GraphicsLib settings.")
     summaryText.appendLine()
 
-    summaryText.appendLine("All Mod Folders".padEnd(OUTPUT_LABEL_WIDTH) + totalBytes.asReadableSize)
-    summaryText.appendLine("Incl. Vanilla Usage".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
+    summaryText.appendLine("Enabled + Disabled Mods w/o Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + totalBytes.asReadableSize)
+    summaryText.appendLine("Enabled + Disabled Mods w/ Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
     summaryText.appendLine()
-    summaryText.appendLine("Enabled Mods Only".padEnd(OUTPUT_LABEL_WIDTH) + totalBytesOfEnabledMods.asReadableSize)
-    summaryText.appendLine("Incl. Vanilla Usage".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytesOfEnabledMods + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
+    summaryText.appendLine("Enabled Mods w/o Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + totalBytesOfEnabledMods.asReadableSize)
+    summaryText.appendLine("Enabled Mods w/ Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytesOfEnabledMods + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
 
     summaryText.appendLine()
-    summaryText.appendLine("*This is only an estimate of VRAM use and actual use may be higher.*")
+    summaryText.appendLine("*This is only an estimate of VRAM use and actual use may be higher or lower*")
+    summaryText.appendLine("*Unused images in mods are counted unless they end with \"$UNUSED_SUFFIX\"*")
 
+    println(modTotals.toString())
     println(summaryText.toString())
+    copyToClipboard(summaryText.toString())
     val outputFile = File("$currentFolder/VRAM_usage_of_mods.txt")
     outputFile.delete()
     outputFile.createNewFile()
     outputFile.writeText(progressText.toString())
     outputFile.appendText(summaryText.toString())
 
-    println("\nFile written to ${outputFile.absolutePath}\nPress any key to continue.")
-    readLine()
+
+    println("\nFile written to ${outputFile.absolutePath}.\nSummary copied to clipboard, ready to paste.")
 }
 
 fun List<Mod>.getBytesUsedByDedupedImages(): Long = this
@@ -357,4 +374,10 @@ val Long.asReadableSize: String
 
 suspend fun <A, B> Iterable<A>.parallelMap(f: suspend (A) -> B): List<B> = coroutineScope {
     mapNotNull { async { f(it) } }.awaitAll()
+}
+
+fun copyToClipboard(string: String) {
+    val stringSelection = StringSelection(string)
+    val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+    clipboard.setContents(stringSelection, null)
 }
