@@ -8,7 +8,7 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.5.0"
+val vramCounterVersion = "1.6.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val relativeJavaExePath = "../../jre/bin/java.exe"
@@ -80,6 +80,10 @@ Not-Windows: Use .sh file
 
 ## Changelog
 
+1.6.0
+
+- Prompt for GraphicsLib settings on each run.
+
 1.5.0
 
 - Make it clearer what it and isn't counted when user only copy/pastes a single line from the output.
@@ -130,9 +134,9 @@ Source: [https://github.com/davidwhitman/VRAM_Calculator]
                         .appendln("showCountedFiles=true")
                         .appendln("showPerformance=true")
                         .appendln("showGfxLibDebugOutput=false")
-                        .appendln("areGfxLibNormalMapsEnabled=true")
-                        .appendln("areGfxLibMaterialMapsEnabled=true")
-                        .appendln("areGfxLibSurfaceMapsEnabled=true")
+                        .appendln("# areGfxLibNormalMapsEnabled=true")
+                        .appendln("# areGfxLibMaterialMapsEnabled=true")
+                        .appendln("# areGfxLibSurfaceMapsEnabled=true")
                         .toString()
                 )
 

@@ -25,6 +25,7 @@ const val VANILLA_GAME_VRAM_USAGE_IN_BYTES =
 const val OUTPUT_LABEL_WIDTH = 38
 const val UNUSED_SUFFIX = "_CURRENTLY_UNUSED"
 const val BACKGROUND_FOLDER_NAME = "backgrounds"
+const val GRAPHICSLIB_ID = "shaderLib"
 
 //val gameModsFolder = File("C:\\Program Files (x86)\\Fractal Softworks\\Starsector\\mods")
 val currentFolder = File(System.getProperty("user.dir"))
@@ -39,9 +40,9 @@ suspend fun main(args: Array<String>) {
     val showCountedFiles = properties?.getProperty("showCountedFiles")?.toBoolean() ?: true
     val showPerformance = properties?.getProperty("showPerformance")?.toBoolean() ?: true
     val showGfxLibDebugOutput = properties?.getProperty("showGfxLibDebugOutput")?.toBoolean() ?: false
-    val areGfxLibNormalMapsEnabled = properties?.getProperty("areGfxLibNormalMapsEnabled")?.toBoolean() ?: false
-    val areGfxLibMaterialMapsEnabled = properties?.getProperty("areGfxLibMaterialMapsEnabled")?.toBoolean() ?: false
-    val areGfxLibSurfaceMapsEnabled = properties?.getProperty("areGfxLibSurfaceMapsEnabled")?.toBoolean() ?: false
+    val areGfxLibNormalMapsEnabledProp = properties?.getProperty("areGfxLibNormalMapsEnabled")?.toBoolean()
+    val areGfxLibMaterialMapsEnabledProp = properties?.getProperty("areGfxLibMaterialMapsEnabled")?.toBoolean()
+    val areGfxLibSurfaceMapsEnabledProp = properties?.getProperty("areGfxLibSurfaceMapsEnabled")?.toBoolean()
 
     val progressText = StringBuilder()
     val modTotals = StringBuilder()
@@ -72,8 +73,34 @@ suspend fun main(args: Array<String>) {
     }
 
     val enabledModIds = getUserEnabledModIds(jsonMapper, progressText)
+
+    val graphicsLibConfig =
+        if (enabledModIds?.contains(GRAPHICSLIB_ID) != true) {
+            GraphicsLibConfig(
+                areGfxLibNormalMapsEnabled = false,
+                areGfxLibMaterialMapsEnabled = false,
+                areGfxLibSurfaceMapsEnabled = false
+            )
+        } else {
+            // GraphicsLib enabled
+            if (listOf(
+                    areGfxLibNormalMapsEnabledProp,
+                    areGfxLibMaterialMapsEnabledProp,
+                    areGfxLibSurfaceMapsEnabledProp
+                ).any { it == null }
+            ) {
+                askUserForGfxLibConfig()
+            } else {
+                GraphicsLibConfig(
+                    areGfxLibNormalMapsEnabled = areGfxLibNormalMapsEnabledProp!!,
+                    areGfxLibMaterialMapsEnabled = areGfxLibMaterialMapsEnabledProp!!,
+                    areGfxLibSurfaceMapsEnabled = areGfxLibSurfaceMapsEnabledProp!!
+                )
+            }
+        }
+
     if (enabledModIds != null) printAndAddLine(
-        "Enabled Mods:\n${enabledModIds.joinToString(separator = "\n")}",
+        "\nEnabled Mods:\n${enabledModIds.joinToString(separator = "\n")}",
         progressText
     )
 
@@ -100,9 +127,7 @@ suspend fun main(args: Array<String>) {
                     csvReader = csvReader,
                     progressText = progressText,
                     showGfxLibDebugOutput = showGfxLibDebugOutput,
-                    areGfxLibNormalMapsEnabled = areGfxLibNormalMapsEnabled,
-                    areGfxLibMaterialMapsEnabled = areGfxLibMaterialMapsEnabled,
-                    areGfxLibSurfaceMapsEnabled = areGfxLibSurfaceMapsEnabled
+                    graphicsLibConfig = graphicsLibConfig
                 )
 
             val timeFinishedGettingGraphicsLibData = Date().time
@@ -227,9 +252,9 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine("  Enabled Mods")
     summaryText.appendLine("    ${enabledMods.joinToString(separator = "\n    ") { it.info.formattedName }}")
     summaryText.appendLine("  GraphicsLib")
-    summaryText.appendLine("    Normal Maps Enabled: $areGfxLibNormalMapsEnabled")
-    summaryText.appendLine("    Material Maps Enabled: $areGfxLibMaterialMapsEnabled")
-    summaryText.appendLine("    Surface Maps Enabled: $areGfxLibSurfaceMapsEnabled")
+    summaryText.appendLine("    Normal Maps Enabled: ${graphicsLibConfig.areGfxLibNormalMapsEnabled}")
+    summaryText.appendLine("    Material Maps Enabled: ${graphicsLibConfig.areGfxLibMaterialMapsEnabled}")
+    summaryText.appendLine("    Surface Maps Enabled: ${graphicsLibConfig.areGfxLibSurfaceMapsEnabled}")
     summaryText.appendLine("    Edit 'config.properties' to choose your GraphicsLib settings.")
     summaryText.appendLine()
 
@@ -256,19 +281,60 @@ suspend fun main(args: Array<String>) {
     println("\nFile written to ${outputFile.absolutePath}.\nSummary copied to clipboard, ready to paste.")
 }
 
+fun askUserForGfxLibConfig(): GraphicsLibConfig {
+    println("GraphicsLib increases VRAM usage, which VRAM_Counter accounts for.")
+    println("Have you modified the default GraphicsLib config? (y/N)")
+    val didUserChangeConfig = parseYesNoInput(readLine(), defaultResultIfBlank = false)
+        ?: return askUserForGfxLibConfig()
+
+    var result = GraphicsLibConfig(false, false, false)
+
+    if (!didUserChangeConfig) {
+        return GraphicsLibConfig(
+            areGfxLibNormalMapsEnabled = true,
+            areGfxLibMaterialMapsEnabled = true,
+            areGfxLibSurfaceMapsEnabled = true
+        )
+    } else {
+        println("Are normal maps enabled? (Y/n)")
+        result = result.copy(
+            areGfxLibNormalMapsEnabled = parseYesNoInput(readLine(), defaultResultIfBlank = true)
+                ?: return askUserForGfxLibConfig()
+        )
+        println("Are material maps enabled? (Y/n)")
+        result = result.copy(
+            areGfxLibMaterialMapsEnabled = parseYesNoInput(readLine(), defaultResultIfBlank = true)
+                ?: return askUserForGfxLibConfig()
+        )
+        println("Are surface maps enabled? (Y/n)")
+        result = result.copy(
+            areGfxLibSurfaceMapsEnabled = parseYesNoInput(readLine(), defaultResultIfBlank = true)
+                ?: return askUserForGfxLibConfig()
+        )
+
+        return result
+    }
+}
+
+fun parseYesNoInput(input: String?, defaultResultIfBlank: Boolean): Boolean? =
+    when {
+        input.isNullOrBlank() -> defaultResultIfBlank
+        listOf("n", "no").any { it.equals(input, ignoreCase = true) } -> false
+        listOf("y", "yes").any { it.equals(input, ignoreCase = true) } -> true
+        else -> null
+    }
+
 fun List<Mod>.getBytesUsedByDedupedImages(): Long = this
     .flatMap { mod -> mod.images.map { img -> mod.info.folder to img } }
     .distinctBy { (modFolder: File, image: ModImage) -> image.file.relativeTo(modFolder).path + image.file.name }
     .sumOf { it.second.bytesUsed }
 
-private fun graphicsLibFilesToExcludeForMod(
+fun graphicsLibFilesToExcludeForMod(
     filesInMod: List<File>,
     csvReader: CsvReader,
     progressText: StringBuilder,
     showGfxLibDebugOutput: Boolean,
-    areGfxLibNormalMapsEnabled: Boolean,
-    areGfxLibMaterialMapsEnabled: Boolean,
-    areGfxLibSurfaceMapsEnabled: Boolean
+    graphicsLibConfig: GraphicsLibConfig
 ): List<GraphicsLibInfo>? {
     return filesInMod
         .filter { it.name.endsWith(".csv") }
@@ -308,9 +374,9 @@ private fun graphicsLibFilesToExcludeForMod(
         }
         ?.filter {
             when (it.mapType) {
-                GraphicsLibInfo.MapType.Normal -> !areGfxLibNormalMapsEnabled
-                GraphicsLibInfo.MapType.Material -> !areGfxLibMaterialMapsEnabled
-                GraphicsLibInfo.MapType.Surface -> !areGfxLibSurfaceMapsEnabled
+                GraphicsLibInfo.MapType.Normal -> !graphicsLibConfig.areGfxLibNormalMapsEnabled
+                GraphicsLibInfo.MapType.Material -> !graphicsLibConfig.areGfxLibMaterialMapsEnabled
+                GraphicsLibInfo.MapType.Surface -> !graphicsLibConfig.areGfxLibSurfaceMapsEnabled
             }
         }
         .also {
