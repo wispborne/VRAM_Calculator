@@ -8,7 +8,7 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.6.0"
+val vramCounterVersion = "1.7.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val relativeJavaExePath = "../../jre/bin/java.exe"
@@ -79,6 +79,10 @@ Not-Windows: Use .sh file
 ![screenshot](screenshot.png)
 
 ## Changelog
+
+1.7.0
+
+- Mod totals are now included in the output text file.
 
 1.6.0
 

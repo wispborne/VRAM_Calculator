@@ -275,6 +275,7 @@ suspend fun main(args: Array<String>) {
     outputFile.delete()
     outputFile.createNewFile()
     outputFile.writeText(progressText.toString())
+    outputFile.writeText(modTotals.toString())
     outputFile.appendText(summaryText.toString())
 
 
