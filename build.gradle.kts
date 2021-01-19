@@ -8,7 +8,7 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.7.0"
+val vramCounterVersion = "1.8.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val relativeJavaExePath = "../../jre/bin/java.exe"
@@ -57,14 +57,6 @@ IF NOT EXIST $relativeJavaExePath (
                         .toString()
                 )
 
-//            File(destinationDirectory.get().asFile, "$toolname.sh")
-//                .writeText(
-//                    StringBuilder()
-//                        .appendln("#!/bin/sh")
-//                        .appendln("$relativeJavaExePath -jar ./$jarFileName")
-//                        .toString()
-//                )
-
             File(destinationDirectory.get().asFile, "readme.md")
                 .writeText(
                     """
@@ -78,7 +70,23 @@ Not-Windows: Use .sh file
 
 ![screenshot](screenshot.png)
 
+## How Much VRAM Do I Have?
+
+Win10: Please read the relevant section in <https://fractalsoftworks.com/forum/index.php?topic=19122.0>.
+
+MacOS: The information is under Apple menu (top-left) -> About This Mac -> More Info -> Hardware -> Graphics/Displays.
+
+Linux: The console command you need changes based on your distro, GPU type, GPU driver, GPU driver version, the year, moon phase, barometric pressure, and the current hormonal makeup of your kernel. Try StackOverflow, and good luck.
+
 ## Changelog
+
+1.8.0
+
+- Sort mods by their VRAM impact in descending order.
+- Show total at bottom of each detailed breakdown.
+- Slight text cleanup.
+- Fixed the detailed breakdown not getting added to the file output.
+- Added section to Readme about finding your GPU's VRAM.
 
 1.7.0
 

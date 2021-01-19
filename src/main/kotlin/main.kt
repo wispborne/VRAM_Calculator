@@ -23,7 +23,9 @@ const val VANILLA_BACKGROUND_TEXTURE_SIZE_IN_BYTES = 12582912f
 const val VANILLA_GAME_VRAM_USAGE_IN_BYTES =
     433586176 // 0.9.1a, per https://fractalsoftworks.com/forum/index.php?topic=8726.0
 const val OUTPUT_LABEL_WIDTH = 38
-const val UNUSED_SUFFIX = "_CURRENTLY_UNUSED"
+
+/** If one of these strings is in the filename, the file is skipped **/
+val UNUSED_INDICATOR = listOf("CURRENTLY_UNUSED", "DO_NOT_USE")
 const val BACKGROUND_FOLDER_NAME = "backgrounds"
 const val GRAPHICSLIB_ID = "shaderLib"
 
@@ -99,12 +101,11 @@ suspend fun main(args: Array<String>) {
             }
         }
 
-    if (enabledModIds != null) printAndAddLine(
-        "\nEnabled Mods:\n${enabledModIds.joinToString(separator = "\n")}",
-        progressText
+    if (enabledModIds != null) progressText.appendAndPrint(
+        "\nEnabled Mods:\n${enabledModIds.joinToString(separator = "\n")}"
     )
 
-    printAndAddLine("Mods folder: ${gameModsFolder.absolutePath}", progressText)
+    progressText.appendAndPrint("Mods folder: ${gameModsFolder.absolutePath}")
 
     val mods = gameModsFolder
         .listFiles()!!
@@ -113,7 +114,7 @@ suspend fun main(args: Array<String>) {
             getModInfo(jsonMapper = jsonMapper, modFolder = it, progressText = progressText)
         }
         .map { modInfo ->
-            printAndAddLine("\nFolder: ${modInfo.name}", progressText)
+            progressText.appendAndPrint("\nFolder: ${modInfo.name}")
             val startTimeForMod = Date().time
 
             val filesInMod =
@@ -131,9 +132,8 @@ suspend fun main(args: Array<String>) {
                 )
 
             val timeFinishedGettingGraphicsLibData = Date().time
-            if (showPerformance) printAndAddLine(
-                "Finished getting graphicslib data for ${modInfo.name} in ${(timeFinishedGettingGraphicsLibData - startTimeForMod)} ms",
-                progressText
+            if (showPerformance) progressText.appendAndPrint(
+                "Finished getting graphicslib data for ${modInfo.name} in ${(timeFinishedGettingGraphicsLibData - startTimeForMod)} ms"
             )
 
             val modImages = filesInMod
@@ -144,7 +144,7 @@ suspend fun main(args: Array<String>) {
                         }
                     } catch (e: Exception) {
                         if (showSkippedFiles)
-                            printAndAddLine("Skipped non-image ${file.relativePath} (${e.message})", progressText)
+                            progressText.appendAndPrint("Skipped non-image ${file.relativePath} (${e.message})")
                         return@parallelMap null
                     }
 
@@ -155,7 +155,7 @@ suspend fun main(args: Array<String>) {
                         bitsInAllChannels = image.colorModel.componentSize.toList(),
                         imageType = when {
                             file.relativePath.contains(BACKGROUND_FOLDER_NAME) -> ModImage.ImageType.Background
-                            file.relativePath.contains(UNUSED_SUFFIX) -> ModImage.ImageType.Unused
+                            UNUSED_INDICATOR.any { suffix -> file.relativePath.contains(suffix) } -> ModImage.ImageType.Unused
                             else -> ModImage.ImageType.Texture
                         }
                     )
@@ -163,17 +163,16 @@ suspend fun main(args: Array<String>) {
                 .filterNotNull()
 
             val timeFinishedGettingFileData = Date().time
-            if (showPerformance) printAndAddLine(
-                "Finished getting file data for ${modInfo.formattedName} in ${(timeFinishedGettingFileData - timeFinishedGettingGraphicsLibData)} ms",
-                progressText
+            if (showPerformance) progressText.appendAndPrint(
+                "Finished getting file data for ${modInfo.formattedName} in ${(timeFinishedGettingFileData - timeFinishedGettingGraphicsLibData)} ms"
             )
 
-            val filesToSumUp = modImages.toMutableList()
+            val imagesToSumUp = modImages.toMutableList()
 
-            filesToSumUp.removeAll(modImages
+            imagesToSumUp.removeAll(modImages
                 .filter { it.imageType == ModImage.ImageType.Unused }
-                .also { if (it.any() && showSkippedFiles) printAndAddLine("Skipping unused files", progressText) }
-                .onEach { printAndAddLine("  ${it.file.relativePath}", progressText) }
+                .also { if (it.any() && showSkippedFiles) progressText.appendAndPrint("Skipping unused files") }
+                .onEach { progressText.appendAndPrint("  ${it.file.relativePath}") }
             )
 
 
@@ -182,75 +181,73 @@ suspend fun main(args: Array<String>) {
             val largestBackgroundBiggerThanVanilla = modImages
                 .filter { it.imageType == ModImage.ImageType.Background && it.textureWidth > VANILLA_BACKGROUND_WIDTH }
                 .maxByOrNull { it.bytesUsed }
-            filesToSumUp.removeAll(
+            imagesToSumUp.removeAll(
                 modImages.filter { it.imageType == ModImage.ImageType.Background && it != largestBackgroundBiggerThanVanilla }
                     .also {
                         if (it.any())
-                            printAndAddLine(
-                                "Skipping backgrounds that are not larger than vanilla and/or not the mod's largest background.",
-                                progressText
+                            progressText.appendAndPrint(
+                                "Skipping backgrounds that are not larger than vanilla and/or not the mod's largest background."
                             )
                     }
-                    .onEach { printAndAddLine("   ${it.file.relativePath}", progressText) }
+                    .onEach { progressText.appendAndPrint("   ${it.file.relativePath}") }
             )
 
-            filesToSumUp.forEach { image ->
-                if (showCountedFiles) printAndAddLine(
+            imagesToSumUp.forEach { image ->
+                if (showCountedFiles) progressText.appendAndPrint(
                     "${image.file.relativePath} - TexHeight: ${image.textureHeight}, " +
                             "TexWidth: ${image.textureWidth}, " +
                             "Channels: ${image.bitsInAllChannels}, " +
                             "Mult: ${image.multiplier}\n" +
-                            "   --> ${image.textureHeight} * ${image.textureWidth} * ${image.bitsInAllChannels.sum()} * ${image.multiplier} = ${image.bytesUsed} bytes added over vanilla",
-                    progressText
+                            "   --> ${image.textureHeight} * ${image.textureWidth} * ${image.bitsInAllChannels.sum()} * ${image.multiplier} = ${image.bytesUsed} bytes added over vanilla"
                 )
             }
 
-            val filesWithoutMaps =
+            val imagesWithoutExcludedGfxLibMaps =
                 if (graphicsLibFilesToExcludeForMod != null)
-                    filesToSumUp.filterNot {
-                        it.file.relativeTo(modInfo.folder) in graphicsLibFilesToExcludeForMod.map {
-                            File(
-                                it.relativeFilePath
-                            )
-                        }
+                    imagesToSumUp.filterNot { image ->
+                        image.file.relativeTo(modInfo.folder) in graphicsLibFilesToExcludeForMod
+                            .map { File(it.relativeFilePath) }
                     }
-                else filesToSumUp
+                else imagesToSumUp
 
             val mod = Mod(
                 info = modInfo,
-                images = filesWithoutMaps
+                isEnabled = modInfo.id in (enabledModIds ?: emptyList()),
+                images = imagesWithoutExcludedGfxLibMaps
             )
 
-            if (showPerformance) printAndAddLine(
-                "Finished calculating file sizes for ${mod.info.formattedName} in ${(Date().time - timeFinishedGettingFileData)} ms",
-                progressText
+            if (showPerformance) progressText.appendAndPrint(
+                "Finished calculating file sizes for ${mod.info.formattedName} in ${(Date().time - timeFinishedGettingFileData)} ms"
             )
-
-            modTotals.appendLine()
-            modTotals.appendLine("${mod.info.formattedName} (${modImages.count()} images)")
-            modTotals.appendLine(mod.totalBytesForMod.asReadableSize)
+            progressText.appendAndPrint(mod.totalBytesForMod.asReadableSize)
             mod
         }
+        .sortedByDescending { it.totalBytesForMod }
 
-    val enabledMods = mods.filter { mod -> mod.info.id in (enabledModIds ?: emptyList()) }
+    mods.forEach { mod ->
+        modTotals.appendLine()
+        modTotals.appendLine("${mod.info.formattedName} • ${mod.images.count()} images • ${if (mod.isEnabled) "Enabled" else "Disabled"}")
+        modTotals.appendLine(mod.totalBytesForMod.asReadableSize)
+    }
+
+    val enabledMods = mods.filter { mod -> mod.isEnabled }
     val totalBytes = mods.getBytesUsedByDedupedImages()
 
     val totalBytesOfEnabledMods = enabledMods
         .getBytesUsedByDedupedImages()
 
-    if (showPerformance) printAndAddLine(
-        "Finished run in ${(Date().time - startTime)} ms",
-        progressText
+    if (showPerformance) progressText.appendAndPrint(
+        "Finished run in ${(Date().time - startTime)} ms"
     )
 
-    printAndAddLine("\n", progressText)
+    progressText.appendAndPrint("\n")
     summaryText.appendLine()
     summaryText.appendLine("-------------")
     summaryText.appendLine("VRAM Use Estimates")
     summaryText.appendLine()
     summaryText.appendLine("Configuration")
     summaryText.appendLine("  Enabled Mods")
-    summaryText.appendLine("    ${enabledMods.joinToString(separator = "\n    ") { it.info.formattedName }}")
+    summaryText.appendLine("    ${enabledMods.joinToString(separator = "\n    ") { it.info.formattedName }.ifBlank { "(none)" }}")
     summaryText.appendLine("  GraphicsLib")
     summaryText.appendLine("    Normal Maps Enabled: ${graphicsLibConfig.areGfxLibNormalMapsEnabled}")
     summaryText.appendLine("    Material Maps Enabled: ${graphicsLibConfig.areGfxLibMaterialMapsEnabled}")
@@ -265,8 +262,8 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine("Enabled Mods w/ Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytesOfEnabledMods + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
 
     summaryText.appendLine()
-    summaryText.appendLine("*This is only an estimate of VRAM use and actual use may be higher or lower*")
-    summaryText.appendLine("*Unused images in mods are counted unless they end with \"$UNUSED_SUFFIX\"*")
+    summaryText.appendLine("** This is only an estimate of VRAM use and actual use may be higher or lower.")
+    summaryText.appendLine("** Unused images in mods are counted unless they contain one of ${UNUSED_INDICATOR.joinToString { "\"$it\"" }} in the file name.")
 
     println(modTotals.toString())
     println(summaryText.toString())
@@ -275,7 +272,7 @@ suspend fun main(args: Array<String>) {
     outputFile.delete()
     outputFile.createNewFile()
     outputFile.writeText(progressText.toString())
-    outputFile.writeText(modTotals.toString())
+    outputFile.appendText(modTotals.toString())
     outputFile.appendText(summaryText.toString())
 
 
@@ -342,7 +339,7 @@ fun graphicsLibFilesToExcludeForMod(
         .mapNotNull { file ->
             runCatching { csvReader.read(file.reader()) }
                 .recover {
-                    printAndAddLine("Unable to read ${file.relativePath}: ${it.message}", progressText)
+                    progressText.appendAndPrint("Unable to read ${file.relativePath}: ${it.message}")
                     null
                 }
                 .getOrNull()
@@ -368,7 +365,7 @@ fun graphicsLibFilesToExcludeForMod(
                     val path = it[pathColumn].trim()
                     GraphicsLibInfo(mapType, path)
                 } catch (e: Exception) {
-                    printAndAddLine("$this - ${e.message}", progressText)
+                    progressText.appendAndPrint("$this - ${e.message}")
                     null
                 }
             }
@@ -381,7 +378,7 @@ fun graphicsLibFilesToExcludeForMod(
             }
         }
         .also {
-            if (showGfxLibDebugOutput) it?.forEach { info -> printAndAddLine(info.toString(), progressText) }
+            if (showGfxLibDebugOutput) it?.forEach { info -> progressText.appendAndPrint(info.toString()) }
         }
 }
 
@@ -390,14 +387,14 @@ fun getUserEnabledModIds(jsonMapper: JsonMapper, progressText: StringBuilder): L
         ?.firstOrNull { it.name == "enabled_mods.json" }
 
     if (enabledModsJsonFile == null || !enabledModsJsonFile.exists()) {
-        printAndAddLine("Unable to find 'enabled_mods.json'.", progressText)
+        progressText.appendAndPrint("Unable to find 'enabled_mods.json'.")
         return null
     }
 
     return try {
         jsonMapper.readValue(enabledModsJsonFile, EnabledModsJsonModel::class.java).enabledMods
     } catch (e: Exception) {
-        printAndAddLine(e.toString(), progressText)
+        progressText.appendAndPrint(e.toString())
         null
     }
 }
@@ -416,7 +413,7 @@ fun getModInfo(jsonMapper: JsonMapper, modFolder: File, progressText: StringBuil
                 )
             }
     } catch (e: Exception) {
-        printAndAddLine("Unable to find 'mod_info.json' in ${modFolder.absolutePath}.", progressText)
+        progressText.appendAndPrint("Unable to find 'mod_info.json' in ${modFolder.absolutePath}.")
         null
     }
 }
@@ -428,9 +425,9 @@ data class ModInfoJsonModel(
     @JsonProperty("version") val version: String,
 )
 
-fun printAndAddLine(line: String, stringBuilder: StringBuilder) {
+fun StringBuilder.appendAndPrint(line: String) {
     println(line)
-    stringBuilder.appendLine(line)
+    this.appendLine(line)
 }
 
 val File.relativePath: String
