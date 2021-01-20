@@ -11,11 +11,31 @@ val kotlinVersion = "1.4.10"
 val vramCounterVersion = "1.9.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
-val relativeJavaExePath = "../../jre/bin/java.exe"
-val relativeStarsectorCorePath = "../../starsector-core"
+val destinationFolder = file("$rootDir/$toolname-$vramCounterVersion")
+val javaPath_Windows = "../../jre/bin/java.exe"
+val javaPath_Linux = "../../jre_linux/bin/java"
+val javaExe_MacOS = "java"
+val starsectorCorePath_Windows = "../../starsector-core"
+val starsectorCorePath_Linux = "../.."
+val starsectorCorePath_MacOS = "../.."
 
 repositories {
     mavenCentral()
+}
+
+application {
+    mainClassName = "MainKt"
+}
+
+dependencies {
+    implementation(kotlin("stdlib-jdk7"))
+    implementation(fileTree("libs") { include("*.jar") })
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
+    implementation("de.siegmar:fastcsv:1.0.3")
+    implementation("com.fasterxml.jackson.core:jackson-core:2.11.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.11.2")
+    // Comnpiled for Java 8, doesn't work
+//    implementation("com.github.doyaaaaaken:kotlin-csv-jvm:0.11.0")
 }
 
 tasks {
@@ -26,7 +46,12 @@ tasks {
 
     named<Jar>("jar")
     {
-        destinationDirectory.set(file("$rootDir/$toolname-$vramCounterVersion"))
+        dependsOn(":copyNativeFiles")
+        dependsOn(":writeReadme")
+        dependsOn(":write-windows-startup")
+        dependsOn(":write-linux-startup")
+        dependsOn(":write-macos-startup")
+        destinationDirectory.set(destinationFolder)
         archiveFileName.set(jarFileName)
 
         // Set the class to run
@@ -40,27 +65,89 @@ tasks {
             .also { from(it) }
 
         doLast {
-            File(destinationDirectory.get().asFile, "$toolname.bat")
+
+            File(destinationDirectory.get().asFile, "LICENSE.txt")
+                .writeText(project.file("LICENSE.txt").readText())
+
+            File(destinationDirectory.get().asFile, "config.properties")
                 .writeText(
                     StringBuilder()
-                        .appendln(
-                            """
-@echo off
-IF NOT EXIST $relativeJavaExePath (
-    ECHO Place $toolname folder in Starsector's mods folder.
-    pause
-) ELSE (
- "$relativeJavaExePath" -Djava.library.path=$relativeStarsectorCorePath/native/windows -jar ./$jarFileName
- pause
-)
-"""
-                        )
+                        .appendln("showSkippedFiles=false")
+                        .appendln("showCountedFiles=true")
+                        .appendln("showPerformance=true")
+                        .appendln("showGfxLibDebugOutput=false")
+                        .appendln("# areGfxLibNormalMapsEnabled=true")
+                        .appendln("# areGfxLibMaterialMapsEnabled=true")
+                        .appendln("# areGfxLibSurfaceMapsEnabled=true")
                         .toString()
                 )
 
-            File(destinationDirectory.get().asFile, "readme.md")
-                .writeText(
-                    """
+            File(destinationDirectory.get().asFile, "screenshot.png")
+                .writeBytes(project.file("screenshot.png").readBytes())
+        }
+    }
+
+    register<Copy>("copyNativeFiles") {
+        from("libs/native")
+        into("${destinationFolder.path}/native")
+    }
+
+    register("write-windows-startup") {
+        File(destinationFolder, "$toolname-windows.bat")
+            .writeText(
+                """
+@echo off
+IF NOT EXIST $javaPath_Windows (
+    ECHO Place $toolname folder in Starsector's mods folder.
+    pause
+) ELSE (
+ "$javaPath_Windows" -Djava.library.path=native/windows -jar ./$jarFileName
+ pause
+)
+"""
+            )
+    }
+
+    register("write-linux-startup") {
+        File(destinationFolder, "$toolname-linux.sh")
+            .writeText(
+                """
+#!/bin/sh
+
+if [ ! -f "$javaPath_Linux" ]; then
+    echo "Place VRAM-Counter folder in Starsector's mods folder."
+    read -p "Press any key to continue ..."
+else
+    "$javaPath_Linux" -Djava.library.path=native/linux -jar ./VRAM-Counter.jar
+    read -p "Press any key to continue ..."
+fi
+"""
+            )
+    }
+
+    register("write-macos-startup") {
+        File(destinationFolder, "$toolname-macos.sh")
+            .writeText(
+                """
+#!/bin/sh
+
+if [ ! -f "$javaExe_MacOS" ]; then
+    echo "Place VRAM-Counter folder in Starsector's mods folder."
+    read -p "Press any key to continue ..."
+else
+    "$javaExe_MacOS" -Djava.library.path=native/linux -jar ./VRAM-Counter.jar
+    read -p "Press any key to continue ..."
+fi
+"""
+            )
+    }
+
+    register("writeReadme") {
+
+        // Write readme.md
+        File(destinationFolder, "readme.md")
+            .writeText(
+                """
 # $toolname $vramCounterVersion
 
 ## Use
@@ -135,42 +222,7 @@ Linux: The console command you need changes based on your distro, GPU type, GPU 
 Original script by Dark Revenant. Transcoded to Kotlin and edited to show more info by Wisp.
 Source: [https://github.com/davidwhitman/VRAM_Calculator]
 """
-                )
-
-            File(destinationDirectory.get().asFile, "LICENSE.txt")
-                .writeText(project.file("LICENSE.txt").readText())
-
-            File(destinationDirectory.get().asFile, "config.properties")
-                .writeText(
-                    StringBuilder()
-                        .appendln("showSkippedFiles=false")
-                        .appendln("showCountedFiles=true")
-                        .appendln("showPerformance=true")
-                        .appendln("showGfxLibDebugOutput=false")
-                        .appendln("# areGfxLibNormalMapsEnabled=true")
-                        .appendln("# areGfxLibMaterialMapsEnabled=true")
-                        .appendln("# areGfxLibSurfaceMapsEnabled=true")
-                        .toString()
-                )
-
-            File(destinationDirectory.get().asFile, "screenshot.png")
-                .writeBytes(project.file("screenshot.png").readBytes())
-        }
+            )
     }
-}
 
-application {
-    mainClassName = "MainKt"
-}
-
-dependencies {
-    implementation(kotlin("stdlib-jdk7"))
-    implementation(fileTree("libs") { include("*.jar") })
-//    runtimeOnly(fileTree(relativeStarsectorCorePath) { include("lwjgl.jar", "lwjgl_util.jar") })
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
-    implementation("de.siegmar:fastcsv:1.0.3")
-    implementation("com.fasterxml.jackson.core:jackson-core:2.11.2")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.11.2")
-    // Comnpiled for Java 8, doesn't work
-//    implementation("com.github.doyaaaaaken:kotlin-csv-jvm:0.11.0")
 }

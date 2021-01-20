@@ -226,7 +226,7 @@ suspend fun main(args: Array<String>) {
 
     mods.forEach { mod ->
         modTotals.appendLine()
-        modTotals.appendLine("${mod.info.formattedName} • ${mod.images.count()} images • ${if (mod.isEnabled) "Enabled" else "Disabled"}")
+        modTotals.appendLine("${mod.info.formattedName} - ${mod.images.count()} images - ${if (mod.isEnabled) "Enabled" else "Disabled"}")
         modTotals.appendLine(mod.totalBytesForMod.bytesAsReadableMiB)
     }
 
@@ -267,6 +267,7 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine()
     summaryText.appendLine("** This is only an estimate of VRAM use and actual use may be higher or lower.")
     summaryText.appendLine("** Unused images in mods are counted unless they contain one of ${UNUSED_INDICATOR.joinToString { "\"$it\"" }} in the file name.")
+    // TODO show warning if within 300mb of available vram
 
     println(modTotals.toString())
     println(summaryText.toString())
