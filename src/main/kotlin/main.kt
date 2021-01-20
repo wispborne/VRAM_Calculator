@@ -219,7 +219,7 @@ suspend fun main(args: Array<String>) {
             if (showPerformance) progressText.appendAndPrint(
                 "Finished calculating file sizes for ${mod.info.formattedName} in ${(Date().time - timeFinishedGettingFileData)} ms"
             )
-            progressText.appendAndPrint(mod.totalBytesForMod.asReadableSize)
+            progressText.appendAndPrint(mod.totalBytesForMod.bytesAsReadableMiB)
             mod
         }
         .sortedByDescending { it.totalBytesForMod }
@@ -227,7 +227,7 @@ suspend fun main(args: Array<String>) {
     mods.forEach { mod ->
         modTotals.appendLine()
         modTotals.appendLine("${mod.info.formattedName} • ${mod.images.count()} images • ${if (mod.isEnabled) "Enabled" else "Disabled"}")
-        modTotals.appendLine(mod.totalBytesForMod.asReadableSize)
+        modTotals.appendLine(mod.totalBytesForMod.bytesAsReadableMiB)
     }
 
     val enabledMods = mods.filter { mod -> mod.isEnabled }
@@ -253,13 +253,16 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine("    Material Maps Enabled: ${graphicsLibConfig.areGfxLibMaterialMapsEnabled}")
     summaryText.appendLine("    Surface Maps Enabled: ${graphicsLibConfig.areGfxLibSurfaceMapsEnabled}")
     summaryText.appendLine("    Edit 'config.properties' to choose your GraphicsLib settings.")
+    getGPUInfo()?.getGPUString()?.also { str ->
+        summaryText.appendLine("  System")
+        summaryText.appendLine(str.joinToString(separator = "\n") { "    $it" }) }
     summaryText.appendLine()
 
-    summaryText.appendLine("Enabled + Disabled Mods w/o Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + totalBytes.asReadableSize)
-    summaryText.appendLine("Enabled + Disabled Mods w/ Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
+    summaryText.appendLine("Enabled + Disabled Mods w/o Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + totalBytes.bytesAsReadableMiB)
+    summaryText.appendLine("Enabled + Disabled Mods w/ Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytes + VANILLA_GAME_VRAM_USAGE_IN_BYTES).bytesAsReadableMiB)
     summaryText.appendLine()
-    summaryText.appendLine("Enabled Mods w/o Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + totalBytesOfEnabledMods.asReadableSize)
-    summaryText.appendLine("Enabled Mods w/ Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytesOfEnabledMods + VANILLA_GAME_VRAM_USAGE_IN_BYTES).asReadableSize)
+    summaryText.appendLine("Enabled Mods w/o Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + totalBytesOfEnabledMods.bytesAsReadableMiB)
+    summaryText.appendLine("Enabled Mods w/ Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + (totalBytesOfEnabledMods + VANILLA_GAME_VRAM_USAGE_IN_BYTES).bytesAsReadableMiB)
 
     summaryText.appendLine()
     summaryText.appendLine("** This is only an estimate of VRAM use and actual use may be higher or lower.")
@@ -433,7 +436,7 @@ fun StringBuilder.appendAndPrint(line: String) {
 val File.relativePath: String
     get() = this.toRelativeString(gameModsFolder)
 
-val Long.asReadableSize: String
+val Long.bytesAsReadableMiB: String
     get() = "%.3f MiB".format(this / 1048576f)
 
 suspend fun <A, B> Iterable<A>.parallelMap(f: suspend (A) -> B): List<B> = coroutineScope {

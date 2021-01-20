@@ -8,10 +8,11 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.8.0"
+val vramCounterVersion = "1.9.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val relativeJavaExePath = "../../jre/bin/java.exe"
+val relativeStarsectorCorePath = "../../starsector-core"
 
 repositories {
     mavenCentral()
@@ -49,7 +50,7 @@ IF NOT EXIST $relativeJavaExePath (
     ECHO Place $toolname folder in Starsector's mods folder.
     pause
 ) ELSE (
- "$relativeJavaExePath" -jar ./$jarFileName
+ "$relativeJavaExePath" -Djava.library.path=$relativeStarsectorCorePath/native/windows -jar ./$jarFileName
  pause
 )
 """
@@ -164,10 +165,12 @@ application {
 
 dependencies {
     implementation(kotlin("stdlib-jdk7"))
+    implementation(fileTree("libs") { include("*.jar") })
+//    runtimeOnly(fileTree(relativeStarsectorCorePath) { include("lwjgl.jar", "lwjgl_util.jar") })
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.9")
     implementation("de.siegmar:fastcsv:1.0.3")
-    implementation ("com.fasterxml.jackson.core:jackson-core:2.11.2")
-    implementation ("com.fasterxml.jackson.core:jackson-databind:2.11.2")
+    implementation("com.fasterxml.jackson.core:jackson-core:2.11.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.11.2")
     // Comnpiled for Java 8, doesn't work
 //    implementation("com.github.doyaaaaaken:kotlin-csv-jvm:0.11.0")
 }
