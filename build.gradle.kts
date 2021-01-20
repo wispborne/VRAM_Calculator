@@ -11,7 +11,7 @@ val kotlinVersion = "1.4.10"
 val vramCounterVersion = "1.9.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
-val destinationFolder = file("$rootDir/$toolname-$vramCounterVersion")
+val destinationFolder = file("$rootDir/artifacts/$toolname-$vramCounterVersion")
 val javaPath_Windows = "../../jre/bin/java.exe"
 val javaPath_Linux = "../../jre_linux/bin/java"
 val javaExe_MacOS = "java"
@@ -46,6 +46,7 @@ tasks {
 
     named<Jar>("jar")
     {
+        dependsOn(":create-artifact-dir")
         dependsOn(":copyNativeFiles")
         dependsOn(":writeReadme")
         dependsOn(":write-windows-startup")
@@ -87,13 +88,17 @@ tasks {
         }
     }
 
+    register("create-artifact-dir") {
+        destinationFolder.mkdirs()
+    }
+
     register<Copy>("copyNativeFiles") {
         from("libs/native")
         into("${destinationFolder.path}/native")
     }
 
     register("write-windows-startup") {
-        File(destinationFolder, "$toolname-windows.bat")
+        File(destinationFolder.path, "$toolname-windows.bat")
             .writeText(
                 """
 @echo off
@@ -109,7 +114,7 @@ IF NOT EXIST $javaPath_Windows (
     }
 
     register("write-linux-startup") {
-        File(destinationFolder, "$toolname-linux.sh")
+        File(destinationFolder.path, "$toolname-linux.sh")
             .writeText(
                 """
 #!/bin/sh
@@ -126,7 +131,7 @@ fi
     }
 
     register("write-macos-startup") {
-        File(destinationFolder, "$toolname-macos.sh")
+        File(destinationFolder.path, "$toolname-macos.sh")
             .writeText(
                 """
 #!/bin/sh

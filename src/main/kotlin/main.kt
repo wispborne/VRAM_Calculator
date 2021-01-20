@@ -240,6 +240,9 @@ suspend fun main(args: Array<String>) {
         "Finished run in ${(Date().time - startTime)} ms"
     )
 
+    val enabledModsString =
+        enabledMods.joinToString(separator = "\n    ") { it.info.formattedName }.ifBlank { "(none)" }
+
     progressText.appendAndPrint("\n")
     summaryText.appendLine()
     summaryText.appendLine("-------------")
@@ -247,15 +250,22 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine()
     summaryText.appendLine("Configuration")
     summaryText.appendLine("  Enabled Mods")
-    summaryText.appendLine("    ${enabledMods.joinToString(separator = "\n    ") { it.info.formattedName }.ifBlank { "(none)" }}")
+    summaryText.appendLine("    $enabledModsString")
     summaryText.appendLine("  GraphicsLib")
     summaryText.appendLine("    Normal Maps Enabled: ${graphicsLibConfig.areGfxLibNormalMapsEnabled}")
     summaryText.appendLine("    Material Maps Enabled: ${graphicsLibConfig.areGfxLibMaterialMapsEnabled}")
     summaryText.appendLine("    Surface Maps Enabled: ${graphicsLibConfig.areGfxLibSurfaceMapsEnabled}")
     summaryText.appendLine("    Edit 'config.properties' to choose your GraphicsLib settings.")
-    getGPUInfo()?.getGPUString()?.also { str ->
+    getGPUInfo()?.also { info ->
         summaryText.appendLine("  System")
-        summaryText.appendLine(str.joinToString(separator = "\n") { "    $it" }) }
+        summaryText.appendLine(info.getGPUString()?.joinToString(separator = "\n") { "    $it" })
+
+        // If expected VRAM after loading game and mods is less than 300 MB, show warning
+        if (info.getFreeVRAM() - (totalBytesOfEnabledMods + VANILLA_GAME_VRAM_USAGE_IN_BYTES) < 300000) {
+            summaryText.appendLine()
+            summaryText.appendLine("WARNING: You may not have enough free VRAM to run your current modlist.")
+        }
+    }
     summaryText.appendLine()
 
     summaryText.appendLine("Enabled + Disabled Mods w/o Vanilla".padEnd(OUTPUT_LABEL_WIDTH) + totalBytes.bytesAsReadableMiB)
@@ -267,7 +277,6 @@ suspend fun main(args: Array<String>) {
     summaryText.appendLine()
     summaryText.appendLine("** This is only an estimate of VRAM use and actual use may be higher or lower.")
     summaryText.appendLine("** Unused images in mods are counted unless they contain one of ${UNUSED_INDICATOR.joinToString { "\"$it\"" }} in the file name.")
-    // TODO show warning if within 300mb of available vram
 
     println(modTotals.toString())
     println(summaryText.toString())
