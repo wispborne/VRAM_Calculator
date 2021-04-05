@@ -174,7 +174,7 @@ Linux: The console command you need changes based on your distro, GPU type, GPU 
 ## Changelog
 
 1.10.0
-- Support for Starsecor 0.9.5a mod_info.json format.
+- Support for Starsector 0.9.5a mod_info.json format.
 - Backwards compatible with 0.91a format.
 
 1.9.0
