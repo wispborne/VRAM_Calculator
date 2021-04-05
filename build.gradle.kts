@@ -8,7 +8,7 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.9.0"
+val vramCounterVersion = "1.10.0"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val destinationFolder = file("$rootDir/artifacts/$toolname-$vramCounterVersion")
@@ -172,6 +172,13 @@ MacOS: The information is under Apple menu (top-left) -> About This Mac -> More 
 Linux: The console command you need changes based on your distro, GPU type, GPU driver, GPU driver version, the year, moon phase, barometric pressure, and the current hormonal makeup of your kernel. Try StackOverflow, and good luck.
 
 ## Changelog
+
+1.10.0
+- Support for Starsecor 0.9.5a mod_info.json format.
+- Backwards compatible with 0.91a format.
+
+1.9.0
+- GPU information, including dedicated VRAM if Nvidia, is now displayed. Credit to LazyWizard for most of the code (taken from Console Commands).
 
 1.8.0
 

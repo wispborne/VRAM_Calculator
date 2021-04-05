@@ -1,4 +1,3 @@
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.json.JsonReadFeature
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
@@ -416,27 +415,34 @@ fun getModInfo(jsonMapper: JsonMapper, modFolder: File, progressText: StringBuil
     return try {
         modFolder.listFiles()
             ?.firstOrNull { file -> file.name == "mod_info.json" }
-            ?.let { modInfoFile -> jsonMapper.readValue(modInfoFile, ModInfoJsonModel::class.java) }
-            ?.let {
-                ModInfo(
-                    id = it.id,
-                    folder = modFolder,
-                    name = it.name,
-                    version = it.version
-                )
+            ?.let { modInfoFile ->
+                runCatching {
+                    val model = jsonMapper.readValue(modInfoFile, ModInfoJsonModel_095a::class.java)
+
+                    ModInfo(
+                        id = model.id,
+                        folder = modFolder,
+                        name = model.name,
+                        version = "${model.version.major}.${model.version.minor}.${model.version.patch}"
+                    )
+                }
+                    .recoverCatching {
+                        val model = jsonMapper.readValue(modInfoFile, ModInfoJsonModel_091a::class.java)
+
+                        ModInfo(
+                            id = model.id,
+                            folder = modFolder,
+                            name = model.name,
+                            version = model.version
+                        )
+                    }
+                    .getOrThrow()
             }
     } catch (e: Exception) {
-        progressText.appendAndPrint("Unable to find 'mod_info.json' in ${modFolder.absolutePath}.")
+        progressText.appendAndPrint("Unable to find or read 'mod_info.json' in ${modFolder.absolutePath}. (${e.message})")
         null
     }
 }
-
-data class EnabledModsJsonModel(@JsonProperty("enabledMods") val enabledMods: List<String>)
-data class ModInfoJsonModel(
-    @JsonProperty("id") val id: String,
-    @JsonProperty("name") val name: String,
-    @JsonProperty("version") val version: String,
-)
 
 fun StringBuilder.appendAndPrint(line: String) {
     println(line)
