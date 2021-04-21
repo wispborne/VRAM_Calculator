@@ -14,9 +14,9 @@ internal fun trimVendorString(vendor: String) = vendor.split("/".toRegex(), 2)[0
 private var window: Long = 0
 
 internal fun getGPUInfo(): GPUInfo? {
-    Display.getAvailableDisplayModes().forEach {
-        println("${it.width} x ${it.height}")
-    }
+//    Display.getAvailableDisplayModes().forEach {
+//        println("${it.width} x ${it.height}")
+//    }
     Display.getAvailableDisplayModes().minByOrNull { it.height }?.let { Display.setDisplayMode(it) }
     Display.setTitle("VRAM Counter: Checking VRAM...")
     Display.create()

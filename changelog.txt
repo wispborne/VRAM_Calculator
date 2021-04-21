@@ -1,0 +1,37 @@
+1.10.1
+- Remove accidentally included output of supported screen resolutions.
+
+1.10.0
+- Support for Starsector 0.9.5a mod_info.json format.
+- Backwards compatible with 0.91a format.
+
+1.9.0
+- GPU information, including dedicated VRAM if Nvidia, is now displayed. Credit to LazyWizard for most of the code (taken from Console Commands).
+
+1.8.0
+- Sort mods by their VRAM impact in descending order.
+- Show total at bottom of each detailed breakdown.
+- Slight text cleanup.
+- Fixed the detailed breakdown not getting added to the file output.
+- Added section to Readme about finding your GPU's VRAM.
+
+1.7.0
+- Mod totals are now included in text ouput file
+
+1.6.0
+- Prompt for GraphicsLib settings on each run.
+
+1.5.0
+- Make it clearer what it and isn't counted when user only copy/pastes a single line from the output.
+- Add all enabled mods to the summary view.
+- Copy the summary to the clipboard so it may be easily pasted into chat.
+
+1.4.0
+- Total estimated use no longer counts images with the same relative path and name multiple times.
+  - So if Mods A and B both have /graphics/image.png, both will have the size counted in the per-mod display, but it will be only counted once in the total.
+
+1.3.0
+- Now prints out estimated usage of *enabled mods*, in addition to all found mods.
+- For readability, only the currently chosen GraphicsLib settings (in 'config.properties') are shown.
+- Fixed the # images count incorrectly counting all files.
+- Now shows mod name, version, and id instead of mod folder name.

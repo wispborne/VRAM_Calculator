@@ -8,7 +8,7 @@ group = "com.wisp"
 val kotlinVersion = "1.4.10"
 
 
-val vramCounterVersion = "1.10.0"
+val vramCounterVersion = "1.10.1"
 val toolname = "VRAM-Counter"
 val jarFileName = "$toolname.jar"
 val destinationFolder = file("$rootDir/artifacts/$toolname-$vramCounterVersion")
